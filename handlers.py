@@ -211,20 +211,10 @@ class BotHandlers:
                     f"Valid Files:\n{file_list}"
                 )
 
-                # Evaluate token count
-                token_count = llm_service.count_tokens_in_context(folder_path)
-                percentage_full = (
-                    (token_count / MAX_TOKENS_IN_CONTEXT) * 100
-                    if MAX_TOKENS_IN_CONTEXT
-                    else 0
-                )
-                percentage_full = min(percentage_full, 100)
-
                 system_response = (
                     f"Status Information:\n\n"
                     f"Name: {user_name}\n"
                     f"{folder_info}\n\n"
-                    f"Context storage is {percentage_full:.2f}% full."
                 )
                 await update.message.reply_text(system_response)
             else:
@@ -303,16 +293,8 @@ class BotHandlers:
 
         context.user_data["vector_store_loaded"] = True
 
-        # Evaluate token count
-        token_count = llm_service.count_tokens_in_context(folder_path)
-        percentage_full = (
-            (token_count / MAX_TOKENS_IN_CONTEXT) * 100 if MAX_TOKENS_IN_CONTEXT else 0
-        )
-        percentage_full = min(percentage_full, 100)
-
         system_response = (
             f"Folder path successfully set to: {folder_path}\n\nValid files have been indexed.\n\n"
-            f"Context storage is {percentage_full:.2f}% full."
         )
         await update.message.reply_text(system_response)
 

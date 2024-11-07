@@ -48,25 +48,6 @@ def main():
         fallbacks=[],
     )
 
-    ask_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("ask", handlers.ask)],
-        states={
-            WAITING_FOR_QUESTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.ask_question)
-            ],
-        },
-        fallbacks=[],
-    )
-
-    project_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("projects", handlers.projects)],
-        states={
-            WAITING_FOR_PROJECT_SELECTION: [
-                CallbackQueryHandler(handlers.handle_project_selection_callback)
-            ],
-        },
-        fallbacks=[],
-    )
 
     application.add_handler(CommandHandler("status", handlers.status))
     application.add_handler(folder_conv_handler)

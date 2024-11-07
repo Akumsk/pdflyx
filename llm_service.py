@@ -1,9 +1,7 @@
 # llm_service.py
 
 import os
-import pandas as pd
 from io import StringIO
-from docx import Document as DocxDocument
 import asyncio
 import datetime
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
@@ -28,18 +26,6 @@ class LLMService:
     vector_store = None  # Class variable to store the vector store
     def __init__(self, model_name=MODEL_NAME):
         self.llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name=model_name)
-#        self.vector_store = None
-
-    def load_excel_file(self, file_path):
-        data = pd.read_excel(file_path)
-        text_data = StringIO()
-        data.to_string(buf=text_data)
-        return text_data.getvalue()
-
-    def load_word_file(self, file_path):
-        doc = DocxDocument(file_path)
-        return "\n".join([para.text for para in doc.paragraphs])
-
 
     def get_metadata(self, folder_path, db_service):
         from langchain.schema import HumanMessage

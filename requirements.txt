@@ -1,0 +1,12 @@
+langchain
+langchain-community
+langchain-openai
+openai
+python-telegram-bot
+PyMuPDF
+faiss-cpu
+python-dotenv
+psycopg2
+tiktoken
+pytest
+pytest-asyncio

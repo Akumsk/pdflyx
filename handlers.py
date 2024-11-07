@@ -6,7 +6,7 @@ import uuid
 from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
-from settings import MAX_TOKENS_IN_CONTEXT, CHAT_HISTORY_LEVEL
+from settings import CHAT_HISTORY_LEVEL
 from db_service import DatabaseService
 from llm_service import LLMService
 from helpers import messages_to_langchain_messages
@@ -102,7 +102,7 @@ def log_event(event_type):
         return wrapper
     return decorator
 
-WAITING_FOR_FOLDER_PATH, WAITING_FOR_QUESTION, WAITING_FOR_PROJECT_SELECTION = range(3)
+WAITING_FOR_FOLDER_PATH = range(3)
 
 class BotHandlers:
     def __init__(self):

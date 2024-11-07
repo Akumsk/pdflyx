@@ -16,9 +16,7 @@ from llm_service import LLMService
 from db_service import DatabaseService
 from handlers import (
     BotHandlers,
-    WAITING_FOR_FOLDER_PATH,
-    WAITING_FOR_QUESTION,
-    WAITING_FOR_PROJECT_SELECTION,
+    WAITING_FOR_FOLDER_PATH
 )
 from exception_handlers import (
     error_handler,

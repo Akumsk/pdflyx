@@ -1,6 +1,7 @@
 # bot.py
 
 import logging
+import os
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -20,7 +21,6 @@ from handlers import (
 )
 from exception_handlers import (
     error_handler,
-    handle_telegram_context_length_exceeded_error,
 )
 
 
@@ -46,7 +46,6 @@ def main():
         fallbacks=[],
     )
 
-
     application.add_handler(CommandHandler("status", handlers.status))
     application.add_handler(folder_conv_handler)
 
@@ -56,6 +55,9 @@ def main():
     # Handlers for access control
     application.add_handler(CommandHandler("request_access", handlers.request_access))
     application.add_handler(CommandHandler("grant_access", handlers.grant_access))
+
+    # Add the handle_file handler
+    application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_file))
 
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_message)

@@ -30,7 +30,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Log the exception to the database
     db_service.log_exception(
-        exception_id=exception_id,
         exception_type=exception_type,
         exception_message=exception_message,
         stack_trace=stack_trace,
@@ -54,7 +53,6 @@ def handle_telegram_context_length_exceeded_error(error, user_id, data_context):
 
     # Log the exception to the database
     db_service.log_exception(
-        exception_id=exception_id,
         exception_type=exception_type,
         exception_message=exception_message,
         stack_trace=stack_trace,

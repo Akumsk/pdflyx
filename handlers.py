@@ -3,8 +3,8 @@
 import logging
 import os
 import uuid
-from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Document
+from telegram.ext import ContextTypes, ConversationHandler, Updater, CommandHandler, MessageHandler, filters, CallbackContext
 
 from settings import CHAT_HISTORY_LEVEL
 from db_service import DatabaseService
@@ -367,6 +367,66 @@ class BotHandlers:
         db_service.save_message(conversation_id, "bot", None, bot_message)
 
         context.user_data['system_response'] = bot_message
+
+    @authorized_only
+    @initialize_services
+    async def handle_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            user = update.message.from_user
+            user_id = user.id
+            user_folder = f"user_documents/{user_id}"
+
+            # Create the user directory if it doesn't exist
+            if not os.path.exists(user_folder):
+                os.makedirs(user_folder)
+
+            message = update.message
+            documents = [message.document] if message.document else message.documents
+
+            if not documents:
+                await update.message.reply_text(
+                    "I'm sorry, but I didn't receive any files. Please attach your documents and try again."
+                )
+                return
+
+            pdf_files = []
+            non_pdf_files = []
+
+            for doc in documents:
+                if doc.mime_type == 'application/pdf':
+                    pdf_files.append(doc)
+                    # Download the PDF file
+                    file = await context.bot.get_file(doc.file_id)
+                    # Sanitize file name
+                    file_name = os.path.basename(doc.file_name)
+                    file_path = os.path.join(user_folder, file_name)
+                    await file.download_to_drive(custom_path=file_path)
+                else:
+                    non_pdf_files.append(doc)
+
+            # Generate appropriate messages
+            if pdf_files and not non_pdf_files:
+                await update.message.reply_text(
+                    "Your documents have been uploaded successfully. You may now ask any questions related to these documents."
+                )
+            elif non_pdf_files and not pdf_files:
+                await update.message.reply_text(
+                    "I'm sorry, but only PDF files are supported. Please upload your documents in PDF format."
+                )
+            elif pdf_files and non_pdf_files:
+                await update.message.reply_text(
+                    "You have selected different file types. Only the PDF files have been uploaded. You may now ask any questions related to these PDF documents."
+                )
+            else:
+                await update.message.reply_text(
+                    "I'm sorry, but I couldn't process the files you sent. Please ensure they are in PDF format and try again."
+                )
+        except Exception as e:
+            # Log the error
+            logging.error(f"Error handling file: {e}")
+            await update.message.reply_text(
+                "An unexpected error occurred while processing your files. Please try again later."
+            )
 
     @authorized_only
     @initialize_services

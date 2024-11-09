@@ -82,8 +82,15 @@ def log_event(event_type):
             result = await func(self, update, context, *args, **kwargs)
 
             # After executing the handler function
-            # Retrieve system_response from context.user_data
+            # Retrieve system_response and conversation_id from context.user_data
             system_response = context.user_data.get('system_response', '')
+            conversation_id = context.user_data.get('conversation_id')
+
+            if not conversation_id:
+                # Handle the case where conversation_id is missing
+                logging.error("conversation_id not found in context.user_data")
+                conversation_id = str(uuid.uuid4())
+                context.user_data['conversation_id'] = conversation_id
 
             # Access db_service
             db_service = context.user_data.get('db_service')
@@ -320,13 +327,16 @@ class BotHandlers:
         llm_service = context.user_data["llm_service"]
         user_message = update.message.text
         user_id = context.user_data["user_id"]
+
+        # Generate conversation_id and store it in context.user_data
         conversation_id = str(uuid.uuid4())
+        context.user_data['conversation_id'] = conversation_id
 
         # Save the user's message
         db_service.save_message(conversation_id, "user", user_id, user_message)
 
+        # Retrieve chat history
         chat_history_texts = db_service.get_chat_history(CHAT_HISTORY_LEVEL, user_id)
-        # Convert chat_history_texts to list of HumanMessage and AIMessage
         chat_history = messages_to_langchain_messages(chat_history_texts)
 
         try:

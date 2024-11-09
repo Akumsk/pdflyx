@@ -39,7 +39,7 @@ class DatabaseService:
             cursor = connection.cursor()
 
             insert_query = """
-                INSERT INTO documents (filename, path_file, document_type, date_modified, date_of_analysis, description, deleted)
+                INSERT INTO documents_server (filename, path_file, document_type, date_modified, date_of_analysis, description, deleted)
                 VALUES (%s, %s, %s, %s, %s, %s, FALSE)
                 ON CONFLICT (path_file) DO UPDATE
                 SET
@@ -89,7 +89,7 @@ class DatabaseService:
                     existing_file_paths_tuple = (existing_file_paths_tuple[0],)
 
                 query = """
-                    UPDATE documents
+                    UPDATE documents_server
                     SET deleted = TRUE
                     WHERE path_file NOT IN %s AND deleted = FALSE
                 """
@@ -97,7 +97,7 @@ class DatabaseService:
             else:
                 # When there are no existing files, mark all files as deleted
                 query = """
-                    UPDATE documents
+                    UPDATE documents_server
                     SET deleted = TRUE
                     WHERE deleted = FALSE
                 """
@@ -118,7 +118,7 @@ class DatabaseService:
             connection = self.connect()
             cursor = connection.cursor()
             query = """
-                SELECT date_modified, date_of_analysis FROM documents
+                SELECT date_modified, date_of_analysis FROM documents_server
                 WHERE path_file = %s
             """
             cursor.execute(query, (path_file,))
@@ -141,7 +141,7 @@ class DatabaseService:
             connection = self.connect()
             cursor = connection.cursor()
             query = """
-                SELECT path_file FROM documents
+                SELECT path_file FROM documents_server
                 WHERE deleted = FALSE
             """
             cursor.execute(query)
@@ -156,19 +156,16 @@ class DatabaseService:
             connection.close()
 
     def save_folder(self, user_id, user_name, folder):
+        connection = None
+        cursor = None
         try:
             connection = self.connect()
             cursor = connection.cursor()
             query = """
-                INSERT INTO folders (user_id, user_name, folder, date_time)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO folders (user_id, user_name, folder)
+                VALUES (%s, %s, %s)
             """
-            date_time = (
-                datetime.now().date().strftime("%Y-%m-%d")
-                + ", "
-                + datetime.now().time().strftime("%H:%M:%S")
-            )
-            cursor.execute(query, (user_id, user_name, folder, date_time))
+            cursor.execute(query, (user_id, user_name, folder))
 
             connection.commit()
             print("Contex Folder Data SAVED!!!")
@@ -176,6 +173,12 @@ class DatabaseService:
         except Exception as e:
             print(f"Error saving folder data: {e}")
             connection.rollback()
+
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
 
     def get_last_folder(self, user_id):
         folder = None
@@ -185,7 +188,7 @@ class DatabaseService:
             query = """
                 SELECT folder FROM folders
                 WHERE user_id = %s
-                ORDER BY date_time DESC
+                ORDER BY timestamp DESC
                 LIMIT 1
             """
             cursor.execute(query, (user_id,))
@@ -198,12 +201,10 @@ class DatabaseService:
 
         return folder
 
-    def save_event_log(self, user_id, event_type, user_message, system_response, conversation_id, timestamp=None):
+    def save_event_log(self, user_id, event_type, user_message, system_response, conversation_id):
         try:
             connection = self.connect()
             cursor = connection.cursor()
-            if timestamp is None:
-                timestamp = datetime.now()
             query = """
                 INSERT INTO event_log (user_id, event_type, user_message, system_response, conversation_id)
                 VALUES (%s, %s, %s, %s, %s)
@@ -223,7 +224,6 @@ class DatabaseService:
 
     def log_exception(
             self,
-            exception_id,
             exception_type,
             exception_message,
             stack_trace,
@@ -234,17 +234,28 @@ class DatabaseService:
             resolved_at=None,
             resolver_notes=None,
     ):
+        connection = None
+        cursor = None
         try:
             connection = self.connect()
             cursor = connection.cursor()
             query = """
-                INSERT INTO exceptions (exception_id, exception_type, exception_message, stack_trace, occurred_at, user_id, data_context, resolved, resolved_at, resolver_notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
+                    INSERT INTO exceptions (
+                        exception_type,
+                        exception_message,
+                        stack_trace,
+                        occurred_at,
+                        user_id,
+                        data_context,
+                        resolved,
+                        resolved_at,
+                        resolver_notes
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING exception_id;
+                """
             cursor.execute(
                 query,
                 (
-                    exception_id,
                     exception_type,
                     exception_message,
                     stack_trace,
@@ -256,12 +267,19 @@ class DatabaseService:
                     resolver_notes,
                 ),
             )
+            exception_id = cursor.fetchone()[0]
             connection.commit()
+            print(f"Exception logged with exception_id: {exception_id}")
+            return exception_id  # Return the generated exception_id if needed
         except Exception as e:
             print(f"Failed to log exception: {e}")
+            if connection:
+                connection.rollback()
         finally:
-            cursor.close()
-            connection.close()
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
 
     def save_message(self, conversation_id, sender_type, user_id, message_text):
         try:
@@ -291,7 +309,7 @@ class DatabaseService:
 
             # Step 1: Get the last 'dialog_numbers' conversation_ids for the user
             query_conversation_ids = """
-                SELECT conversation_id, MAX(date + timestamp) as last_datetime
+                SELECT conversation_id, MAX(timestamp) as last_datetime
                 FROM messages
                 WHERE user_id = %s AND sender_type = 'user'
                 GROUP BY conversation_id
@@ -308,7 +326,7 @@ class DatabaseService:
 
             # Step 2: Fetch messages for these conversation_ids, ordered by datetime
             query_messages = """
-                SELECT conversation_id, sender_type, message_text, date + timestamp as datetime
+                SELECT conversation_id, sender_type, message_text, timestamp as datetime
                 FROM messages
                 WHERE conversation_id = ANY(%s::uuid[])
                 ORDER BY conversation_id, datetime ASC
@@ -343,6 +361,7 @@ class DatabaseService:
             if connection:
                 connection.close()
 
+    ##User Functions
     def check_user_access(self, user_id):
         try:
             connection = self.connect()
@@ -422,4 +441,3 @@ class DatabaseService:
 
     def close(self):
         self.conn.close()
-

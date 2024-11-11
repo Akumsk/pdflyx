@@ -10,6 +10,7 @@ from settings import CHAT_HISTORY_LEVEL
 from db_service import DatabaseService
 from llm_service import LLMService
 from helpers import messages_to_langchain_messages
+import text
 
 # Decorators:
 def authorized_only(func):
@@ -109,7 +110,7 @@ def log_event(event_type):
         return wrapper
     return decorator
 
-WAITING_FOR_FOLDER_PATH = range(3)
+WAITING_FOR_FOLDER_PATH = range(1)
 
 class BotHandlers:
     def __init__(self):
@@ -143,6 +144,7 @@ class BotHandlers:
 
         if last_folder and os.path.isdir(last_folder):
             context.user_data["folder_path"] = last_folder
+            context.user_data["context_source"] = "folder"  # Set context source as folder
             valid_files_in_folder = [
                 f
                 for f in os.listdir(last_folder)
@@ -152,39 +154,26 @@ class BotHandlers:
 
             if valid_files_in_folder:
                 index_status = llm_service.load_and_index_documents(last_folder)
-                if index_status != "Documents successfully indexed.":
+                if index_status != text.Responses.documents_indexed():
                     logging.error(
                         f"Error during load_and_index_documents: {index_status}"
                     )
                     await update.message.reply_text(
-                        "An error occurred while loading and indexing your documents. Please try again later."
+                        text.Responses.indexing_error()
                     )
                     return
 
                 context.user_data["vector_store_loaded"] = True
 
-                system_response = (
-                    f"Welcome back, {user_name}! I have loaded your previous folder for context:\n\n"
-                    f"{last_folder}\n\n"
-                    # f"Context storage is {percentage_full:.2f}% full.\n\n"
-                    "You can specify any folder using /folder.\n"
-                    "/start - Display this introduction message.\n"
-                    "/status - Display your current settings.\n"
-                    "Send any message without a command to ask a question."
-                )
+                system_response = text.Greetings.welcome_back(user_name)
                 await update.message.reply_text(system_response)
             else:
-                system_response = f"Welcome back, {user_name}! However, no valid files were found in your last folder: {last_folder}."
+                system_response = (
+                    f"Welcome back, {user_name}! However, no valid files were found in your last folder: {last_folder}."
+                )
                 await update.message.reply_text(system_response)
         else:
-            system_response = (
-                "Welcome to the AI document assistant bot! This bot generates responses using documents "
-                "in a specified folder. You can interact with the bot using the following commands:\n\n"
-                "/start - Display this introduction message.\n"
-                "/folder - Set the folder path where your documents are located.\n"
-                "/status - Display your current settings.\n"
-                "Send any message without a command to ask a question."
-            )
+            system_response = text.Greetings.first_time()
             await update.message.reply_text(system_response)
 
         # Store system_response in context.user_data
@@ -198,19 +187,11 @@ class BotHandlers:
         llm_service = context.user_data["llm_service"]
         user_name = update.effective_user.full_name
         user_id = context.user_data["user_id"]
-        user_message = '/status'
-        conversation_id = str(uuid.uuid4())
         folder_path = context.user_data.get("folder_path", "")
         valid_files_in_folder = context.user_data.get("valid_files_in_folder", [])
+        context_source = context.user_data.get("context_source", "none")
 
-        if not folder_path:
-            system_response = (
-                f"Status Information:\n\n"
-                f"Name: {user_name}\n"
-                "No folder path has been set yet. Please set it using the /folder command."
-            )
-            await update.message.reply_text(system_response)
-        else:
+        if context_source == "folder":
             if valid_files_in_folder:
                 file_list = "\n".join(valid_files_in_folder)
                 folder_info = (
@@ -218,21 +199,28 @@ class BotHandlers:
                     f"Valid Files:\n{file_list}"
                 )
 
-                system_response = (
-                    f"Status Information:\n\n"
-                    f"Name: {user_name}\n"
-                    f"{folder_info}\n\n"
-                )
-                await update.message.reply_text(system_response)
+                system_response = text.Status.folder_set(user_name, folder_path, file_list)
             else:
-                system_response = (
-                    f"Status Information:\n\n"
-                    f"Name: {user_name}\n"
-                    f"The folder path is currently set to: {folder_path}, but no valid files were found."
-                )
-                await update.message.reply_text(system_response)
+                system_response = text.Status.folder_no_files(user_name, folder_path)
 
-            # Save event log
+        elif context_source == "upload":
+            if valid_files_in_folder:
+                file_list = "\n".join(valid_files_in_folder)
+                folder_info = (
+                    f"Documents sent to the chat are used as context.\n\n"
+                    f"Valid Files:\n{file_list}"
+                )
+
+                system_response = text.Status.upload_set(user_name, file_list)
+            else:
+                system_response = text.Status.upload_no_files(user_name)
+
+        else:
+            system_response = text.Status.no_context(user_name)
+
+        await update.message.reply_text(system_response)
+
+        # Save event log
         db_service = context.user_data.get("db_service")
         context.user_data['system_response'] = system_response
 
@@ -242,9 +230,7 @@ class BotHandlers:
     async def folder(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /folder command."""
         user_id = update.effective_user.id
-        user_message = '/folder'
-        conversation_id = str(uuid.uuid4())
-        system_response = "Please provide the folder path for your documents:"
+        system_response = text.Responses.request_access()
         await update.message.reply_text(system_response)
 
         # Save event log
@@ -264,12 +250,10 @@ class BotHandlers:
         folder_path = update.message.text.strip()
         user_id = context.user_data["user_id"]
         user_name = update.effective_user.full_name
-        user_message = folder_path
-        conversation_id = str(uuid.uuid4())
 
         # Check if the folder path exists
         if not os.path.isdir(folder_path):
-            system_response = "Invalid folder path. Please provide a valid path."
+            system_response = text.Responses.invalid_folder_path()
             await update.message.reply_text(system_response)
             # Save event log
             context.user_data['system_response'] = system_response
@@ -280,7 +264,7 @@ class BotHandlers:
             f for f in os.listdir(folder_path) if f.endswith((".pdf", ".docx", ".xlsx"))
         ]
         if not valid_files_in_folder:
-            system_response = "No valid files found in the folder. Please provide a folder containing valid documents."
+            system_response = text.Responses.no_valid_files()
             await update.message.reply_text(system_response)
             # Save event log
             context.user_data['system_response'] = system_response
@@ -289,10 +273,11 @@ class BotHandlers:
         # Set user-specific folder path and process the documents
         context.user_data["folder_path"] = folder_path
         context.user_data["valid_files_in_folder"] = valid_files_in_folder
+        context.user_data["context_source"] = "folder"  # Set context source as folder
         index_status = llm_service.load_and_index_documents(folder_path)
-        if index_status != "Documents successfully indexed.":
+        if index_status != text.Responses.documents_indexed():
             logging.error(f"Error during load_and_index_documents: {index_status}")
-            system_response = "An error occurred while loading and indexing your documents. Please try again later."
+            system_response = text.Responses.indexing_error()
             await update.message.reply_text(system_response)
             # Save event log
             context.user_data['system_response'] = system_response
@@ -305,7 +290,7 @@ class BotHandlers:
         )
         await update.message.reply_text(system_response)
 
-        # Save user info in database
+        # Save folder path in database
         db_service.save_folder(
             user_id=user_id, user_name=user_name, folder=folder_path
         )
@@ -314,6 +299,7 @@ class BotHandlers:
         context.user_data['system_response'] = system_response
 
         return ConversationHandler.END
+
 
 
     @authorized_only
@@ -343,21 +329,28 @@ class BotHandlers:
             response, source_files = llm_service.generate_response(user_message, chat_history=chat_history)
         except Exception as e:
             logging.error(f"Error during generate_response: {e}")
-            system_response = "An error occurred while processing your message. Please try again later."
+            system_response = text.Responses.processing_error()
             await update.message.reply_text(system_response)
             # Save event log
             context.user_data['system_response'] = system_response
             return ConversationHandler.END
 
-            # Prepare the bot's response
-        bot_message = f"{response}\n\nReferences:"
+        # Prepare the bot's response
+        bot_message = f"{response}"
 
         if source_files:
-            # Create buttons for each source file
-            keyboard = [
-                [InlineKeyboardButton(file, callback_data=f"get_file:{file}")]
-                for file in source_files
-            ]
+            # Create a mapping from short IDs to filenames
+            file_id_map = {}
+            keyboard = []
+            for idx, file in enumerate(source_files):
+                # Generate a short ID, e.g., 'file_0', 'file_1', etc.
+                file_id = f"file_{idx}"
+                file_id_map[file_id] = file
+                keyboard.append([InlineKeyboardButton(file, callback_data=f"get_file:{file_id}")])
+
+            # Store the mapping in context.user_data
+            context.user_data['file_id_map'] = file_id_map
+
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(bot_message, reply_markup=reply_markup)
         else:
@@ -371,22 +364,31 @@ class BotHandlers:
     @authorized_only
     @initialize_services
     async def handle_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle file uploads from the user. Each upload replaces the previous context."""
+
         try:
             user = update.message.from_user
             user_id = user.id
             user_folder = f"user_documents/{user_id}"
+            db_service = context.user_data["db_service"]
+            llm_service = context.user_data["llm_service"]
 
             # Create the user directory if it doesn't exist
             if not os.path.exists(user_folder):
                 os.makedirs(user_folder)
+            else:
+                # Clear existing files in the user folder to ensure context is only with new files
+                for filename in os.listdir(user_folder):
+                    file_path = os.path.join(user_folder, filename)
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
 
             message = update.message
             documents = [message.document] if message.document else message.documents
 
             if not documents:
-                await update.message.reply_text(
-                    "I'm sorry, but I didn't receive any files. Please attach your documents and try again."
-                )
+                system_response = text.Responses.no_files_received()
+                await update.message.reply_text(system_response)
                 return
 
             pdf_files = []
@@ -394,6 +396,10 @@ class BotHandlers:
 
             for doc in documents:
                 if doc.mime_type == 'application/pdf':
+                    if doc.file_size > 20 * 1024 * 1024:
+                        system_response = text.Responses.file_too_large()
+                        await update.message.reply_text(system_response)
+                        return
                     pdf_files.append(doc)
                     # Download the PDF file
                     file = await context.bot.get_file(doc.file_id)
@@ -404,38 +410,69 @@ class BotHandlers:
                 else:
                     non_pdf_files.append(doc)
 
-            # Generate appropriate messages
-            if pdf_files and not non_pdf_files:
-                await update.message.reply_text(
-                    "Your documents have been uploaded successfully. You may now ask any questions related to these documents."
+            # After saving files, set the folder as context folder and index documents
+            if pdf_files:
+                # Update context with folder path and valid files
+                context.user_data["folder_path"] = user_folder
+                context.user_data["context_source"] = "upload"  # Set context source as upload
+                valid_files_in_folder = [
+                    f for f in os.listdir(user_folder) if f.endswith((".pdf", ".docx", ".xlsx"))
+                ]
+                context.user_data["valid_files_in_folder"] = valid_files_in_folder
+
+                # Index documents
+                index_status = llm_service.load_and_index_documents(user_folder)
+                if index_status != text.Responses.documents_indexed():
+                    logging.error(f"Error during load_and_index_documents: {index_status}")
+                    system_response = text.Responses.indexing_error()
+                    await update.message.reply_text(system_response)
+                    return
+                context.user_data["vector_store_loaded"] = True
+
+                # Save folder path in database
+                user_name = update.effective_user.full_name
+                db_service.save_folder(
+                    user_id=user_id, user_name=user_name, folder=user_folder
                 )
-            elif non_pdf_files and not pdf_files:
-                await update.message.reply_text(
-                    "I'm sorry, but only PDF files are supported. Please upload your documents in PDF format."
-                )
-            elif pdf_files and non_pdf_files:
-                await update.message.reply_text(
-                    "You have selected different file types. Only the PDF files have been uploaded. You may now ask any questions related to these PDF documents."
-                )
+
+                # Generate appropriate messages
+                if not non_pdf_files:
+                    system_response = text.Responses.upload_success()
+                else:
+                    system_response = text.Responses.upload_partial_success()
+                await update.message.reply_text(system_response)
             else:
-                await update.message.reply_text(
-                    "I'm sorry, but I couldn't process the files you sent. Please ensure they are in PDF format and try again."
-                )
+                if non_pdf_files and not pdf_files:
+                    system_response = text.Responses.unsupported_files()
+                else:
+                    system_response = text.Responses.processing_error()
+                await update.message.reply_text(system_response)
+
+            # Save event log
+            context.user_data['system_response'] = system_response
+
         except Exception as e:
             # Log the error
             logging.error(f"Error handling file: {e}")
-            await update.message.reply_text(
-                "An unexpected error occurred while processing your files. Please try again later."
-            )
+            system_response = text.Responses.generic_error()
+            await update.message.reply_text(system_response)
+
 
     @authorized_only
     @initialize_services
     async def send_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle sending the requested file back to the user based on short ID."""
+
         query = update.callback_query
         await query.answer()
         data = query.data
         if data.startswith("get_file:"):
-            file_name = data[len("get_file:"):]
+            file_id = data[len("get_file:"):]
+            file_id_map = context.user_data.get('file_id_map', {})
+            file_name = file_id_map.get(file_id)
+            if not file_name:
+                await query.message.reply_text(text.FileResponses.file_not_found())
+                return
             folder_path = context.user_data.get("folder_path")
             if folder_path:
                 file_path = os.path.join(folder_path, file_name)
@@ -445,11 +482,11 @@ class BotHandlers:
                             await query.message.reply_document(document=f, filename=file_name)
                     except Exception as e:
                         logging.error(f"Error sending file: {e}")
-                        await query.message.reply_text("An error occurred while sending the file.")
+                        await query.message.reply_text(text.FileResponses.send_file_error())
                 else:
-                    await query.message.reply_text("File not found.")
+                    await query.message.reply_text(text.FileResponses.file_not_found())
             else:
-                await query.message.reply_text("Folder path not set.")
+                await query.message.reply_text(text.FileResponses.folder_not_set())
         else:
             await query.message.reply_text("Unknown command.")
 
@@ -474,7 +511,7 @@ class BotHandlers:
         await context.bot.send_message(chat_id=admin_id, text=message)
 
         # Inform the user
-        system_response = "Your access request has been sent to the admin."
+        system_response = text.Responses.access_requested()
         await update.message.reply_text(system_response)
         context.user_data['system_response'] = system_response
 
@@ -483,13 +520,15 @@ class BotHandlers:
     async def grant_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_id = update.effective_user.id
         if str(admin_id) != os.getenv("ADMIN_TELEGRAM_ID"):
-            await update.message.reply_text("You are not authorized to perform this action.")
+            await update.message.reply_text(text.Responses.unauthorized_action())
             return
 
         try:
             user_id_to_grant = int(context.args[0])
             db_service = context.user_data['db_service']
             db_service.grant_access(user_id_to_grant)
-            await update.message.reply_text(f"User {user_id_to_grant} has been granted access.")
+            system_response = text.Responses.grant_access_success(user_id_to_grant)
+            await update.message.reply_text(system_response)
         except (IndexError, ValueError):
-            await update.message.reply_text("Usage: /grant_access <user_id>")
+            system_response = text.Responses.grant_access_usage()
+            await update.message.reply_text(system_response)

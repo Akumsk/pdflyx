@@ -1,9 +1,12 @@
 # llm_service.py
 
 import os
+import warnings
 from io import StringIO
 import asyncio
 import datetime
+
+import fitz
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain_core.messages import HumanMessage
@@ -65,7 +68,6 @@ class LLMService:
         return "Documents successfully indexed."
 
     def generate_response(self, prompt, chat_history=None):
-
         if not LLMService.vector_store:
             return (
                 "Please set the folder path using /folder and ensure documents are loaded.",
@@ -76,7 +78,7 @@ class LLMService:
         if chat_history is None:
             chat_history = []
 
-        # Create the retriever with k=
+        # Create the retriever with k=DOCS_IN_RETRIEVER
         retriever = LLMService.vector_store.as_retriever(search_kwargs={'k': DOCS_IN_RETRIEVER})
 
         # Create the history-aware retriever
@@ -97,12 +99,12 @@ class LLMService:
 
         # Create the question-answering chain
         system_prompt = (
-            "You are a project assistant from consultant side on design and construction projects."
+            "You are a project assistant from consultant side on design and construction projects. "
             "Use the following pieces of retrieved context to answer "
             "the question. If you don't know the answer, say that you "
-            " Do not include references to the source documents in your answer."
-            f"don't know. If you need to use current date, today is {current_timestamp()}."
-            "If Prompt include request to provide a link to documents in context, respond have to be: Please follow the link below:"
+            "don't know. Do not include references to the source documents in your answer. "
+            f"Don't know. If you need to use current date, today is {current_timestamp()}. "
+            "If Prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
             " \n\n{context}"
         )
 
@@ -127,6 +129,9 @@ class LLMService:
         answer = result.get("answer", "")
         sources = result.get("context", [])
 
+        # Implement similarity threshold logic
+        # For demonstration, we'll assume that if sources are returned, they are relevant.
+        # You can enhance this by calculating similarity scores and setting a threshold.
 
         if not sources:
             return answer, None
@@ -144,15 +149,87 @@ class LLMService:
                 references[filename] = set()
             references[filename].add(page)
 
-        answer_with_references = answer + "\n\n------------------" + "\nReferences:\n"
+        # Only append references if the prompt is likely related to documents
+        # For a more robust solution, implement similarity checks here
+        # For example, calculate cosine similarity between prompt and retrieved docs
 
-        for doc_name, pages in references.items():
-            pages_list = sorted(pages)
-            pages_str = ', '.join(str(page) for page in pages_list)
-            answer_with_references += f"{doc_name}, pages: {pages_str}\n"
+        # Placeholder for similarity check
+        # Implement your similarity logic here and set 'is_relevant' accordingly
+        is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)
 
-        return answer_with_references, source_files
+        if is_relevant:
+            answer_with_references = answer + "\n\n------------------" + "\nReferences:\n"
 
+            for doc_name, pages in references.items():
+                pages_list = sorted(pages)
+                pages_str = ', '.join(str(page) for page in pages_list)
+                answer_with_references += f"{doc_name}, pages: {pages_str}\n"
+
+            return answer_with_references, source_files
+        else:
+            return answer, None
+
+    def is_prompt_relevant_to_documents(self, prompt, sources):
+        """
+        Determine if the prompt is relevant to the retrieved documents.
+        Implement a similarity check or any other logic as needed.
+        For demonstration, we'll perform a simple keyword overlap.
+        """
+        # Extract keywords from the prompt
+        prompt_keywords = set(prompt.lower().split())
+
+        # Extract keywords from the sources
+        source_text = ' '.join([doc.page_content.lower() for doc in sources])
+        source_keywords = set(source_text.split())
+
+        # Calculate overlap
+        overlap = prompt_keywords.intersection(source_keywords)
+
+        # Define a threshold for relevance
+        relevance_threshold = 0.1  # 10% overlap
+
+        if len(prompt_keywords) == 0:
+            return False
+
+        similarity_ratio = len(overlap) / len(prompt_keywords)
+
+        return similarity_ratio >= relevance_threshold
+
+    def get_empty_docs(self, folder_path):
+        """
+        Scan through all PDF files in the specified folder and return a list of filenames
+        that contain one or more empty pages.
+        """
+        empty_docs = []
+
+        # Suppress warnings from PyMuPDFLoader if necessary
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            for filename in os.listdir(folder_path):
+                if not filename.lower().endswith(".pdf"):
+                    continue  # Skip non-PDF files
+
+                file_path = os.path.join(folder_path, filename)
+
+                try:
+                    # Open the PDF using PyMuPDF
+                    with fitz.open(file_path) as doc:
+                        for page_num in range(len(doc)):
+                            page = doc.load_page(page_num)
+                            text = page.get_text().strip()
+
+                            if not text:
+                                # Empty page found
+                                print(f"Empty content on page {page_num} of document {filename}")
+                                empty_docs.append(filename)
+                                break  # No need to check further pages in this document
+
+                except Exception as e:
+                    print(f"Error processing {filename}: {e}")
+                    continue  # Skip to the next file in case of an error
+
+        return empty_docs
 
     def get_metadata(self, folder_path, db_service):
         from langchain.schema import HumanMessage

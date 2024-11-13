@@ -17,12 +17,10 @@ from llm_service import LLMService
 from db_service import DatabaseService
 from handlers import (
     BotHandlers,
-    WAITING_FOR_FOLDER_PATH
 )
 from exception_handlers import (
     error_handler,
 )
-
 
 def main():
     logging.basicConfig(level=logging.INFO)
@@ -33,21 +31,13 @@ def main():
         ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(handlers.post_init).build()
     )
 
-    folder_conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("folder", handlers.folder),
-            CommandHandler("start", handlers.start),
-        ],
-        states={
-            WAITING_FOR_FOLDER_PATH: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.set_folder)
-            ],
-        },
-        fallbacks=[],
-    )
-
+    application.add_handler(CommandHandler("start", handlers.start))
+    application.add_handler(CommandHandler("knowledge_base", handlers.knowledge_base))
     application.add_handler(CommandHandler("status", handlers.status))
-    application.add_handler(folder_conv_handler)
+
+    # Handle callback queries for knowledge base selection and file downloads
+    application.add_handler(CallbackQueryHandler(handlers.set_knowledge_base, pattern=r'^set_knowledge:'))
+    application.add_handler(CallbackQueryHandler(handlers.send_file, pattern=r'^get_file:'))
 
     # Handler for file download
     application.add_handler(CallbackQueryHandler(handlers.send_file, pattern=r'^get_file:'))

@@ -60,7 +60,7 @@ def initialize_services(func):
 def ensure_documents_indexed(func):
     async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         if not context.user_data.get("vector_store_loaded", False):
-            system_response = "Documents are not indexed yet. Use /folder or /knowledge_base first."
+            system_response = "Documents are not indexed yet. Use /knowledge_base first."
             await update.message.reply_text(system_response)
             return ConversationHandler.END
         valid_files_in_folder = context.user_data.get("valid_files_in_folder", [])
@@ -119,7 +119,7 @@ class BotHandlers:
     async def post_init(self, application):
         commands = [
             BotCommand("start", "Display introduction message"),
-            BotCommand("folder", "Set folder path for documents"),
+            BotCommand("knowledge_base", "Select a knowledge base"),
             BotCommand("status", "Display current status and information"),
             BotCommand("request_access", "Request access to the bot"),
             BotCommand("grant_access", "Grant access to a user (Admin only)"),
@@ -134,47 +134,12 @@ class BotHandlers:
         language_code = context.user_data['language_code']
 
         db_service = context.user_data["db_service"]
-        llm_service = context.user_data["llm_service"]
 
         # Save or update user info
         db_service.save_user_info(user_id, user_name, language_code)
 
-        # Try to get the last folder from the database for the user
-        last_folder = db_service.get_last_folder(user_id)
-
-        if last_folder and os.path.isdir(last_folder):
-            context.user_data["folder_path"] = last_folder
-            context.user_data["context_source"] = "folder"  # Set context source as folder
-            valid_files_in_folder = [
-                f
-                for f in os.listdir(last_folder)
-                if f.endswith(".pdf")
-            ]
-            context.user_data["valid_files_in_folder"] = valid_files_in_folder
-
-            if valid_files_in_folder:
-                index_status = llm_service.load_and_index_documents(last_folder)
-                if index_status != text.Responses.documents_indexed():
-                    logging.error(
-                        f"Error during load_and_index_documents: {index_status}"
-                    )
-                    await update.message.reply_text(
-                        text.Responses.indexing_error()
-                    )
-                    return
-
-                context.user_data["vector_store_loaded"] = True
-
-                system_response = text.Greetings.welcome_back(user_name)
-                await update.message.reply_text(system_response)
-            else:
-                system_response = (
-                    f"Welcome back, {user_name}! However, no valid files were found in your last folder: {last_folder}."
-                )
-                await update.message.reply_text(system_response)
-        else:
-            system_response = text.Greetings.first_time()
-            await update.message.reply_text(system_response)
+        system_response = text.Greetings.first_time()
+        await update.message.reply_text(system_response)
 
         # Store system_response in context.user_data
         context.user_data['system_response'] = system_response
@@ -191,30 +156,21 @@ class BotHandlers:
         valid_files_in_folder = context.user_data.get("valid_files_in_folder", [])
         context_source = context.user_data.get("context_source", "none")
 
-        if context_source == "folder":
+        if context_source in ["folder", "upload"]:
             if valid_files_in_folder:
                 file_list = "\n".join(valid_files_in_folder)
-                folder_info = (
-                    f"The folder path is currently set to: {folder_path}\n\n"
-                    f"Valid Files:\n{file_list}"
-                )
-
-                system_response = text.Status.folder_set(user_name, folder_path, file_list)
+                # Retrieve list of empty documents
+                empty_list = llm_service.get_empty_docs(folder_path)
+                if context_source == "folder":
+                    system_response = text.Status.folder_set(user_name, folder_path, file_list,
+                                                             empty_list if empty_list else None)
+                elif context_source == "upload":
+                    system_response = text.Status.upload_set(user_name, file_list, empty_list if empty_list else None)
             else:
-                system_response = text.Status.folder_no_files(user_name, folder_path)
-
-        elif context_source == "upload":
-            if valid_files_in_folder:
-                file_list = "\n".join(valid_files_in_folder)
-                folder_info = (
-                    f"Documents sent to the chat are used as context.\n\n"
-                    f"Valid Files:\n{file_list}"
-                )
-
-                system_response = text.Status.upload_set(user_name, file_list)
-            else:
-                system_response = text.Status.upload_no_files(user_name)
-
+                if context_source == "folder":
+                    system_response = text.Status.folder_no_files(user_name, folder_path)
+                elif context_source == "upload":
+                    system_response = text.Status.upload_no_files(user_name)
         else:
             system_response = text.Status.no_context(user_name)
 
@@ -227,17 +183,56 @@ class BotHandlers:
     @authorized_only
     @initialize_services
     @log_event(event_type='command')
-    async def folder(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle the /folder command."""
-        user_id = update.effective_user.id
-        system_response = text.Responses.request_access()
-        await update.message.reply_text(system_response)
+    async def knowledge_base(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /knowledge_base command."""
+        keyboard = [
+            [InlineKeyboardButton("Russian Regulations", callback_data='set_knowledge:Russian')],
+            [InlineKeyboardButton("Indonesian Regulations", callback_data='set_knowledge:Indonesian')],
+            [InlineKeyboardButton("ISO Regulations", callback_data='set_knowledge:ISO')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Please select a knowledge base:", reply_markup=reply_markup)
 
-        # Save event log
-        db_service = context.user_data["db_service"]
-        context.user_data['system_response'] = system_response
+    @authorized_only
+    @initialize_services
+    async def set_knowledge_base(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Set the folder path based on the user's knowledge base selection."""
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+        if data.startswith("set_knowledge:"):
+            selection = data[len("set_knowledge:"):]
+            if selection == "Russian":
+                folder_path = r"E:\knowledge_base\russian_regulations"
+            elif selection == "Indonesian":
+                folder_path = r"E:\knowledge_base\indonesian_regulations"
+            elif selection == "ISO":
+                folder_path = r"E:\knowledge_base\iso_regulations"
+            else:
+                await query.message.reply_text("Unknown knowledge base selected.")
+                return
+            # Set the folder path and process the documents
+            context.user_data["folder_path"] = folder_path
+            context.user_data["context_source"] = "folder"  # Set context source as folder
 
-        return WAITING_FOR_FOLDER_PATH
+            # Index the documents in the folder
+            llm_service = context.user_data["llm_service"]
+            valid_files_in_folder = [
+                f for f in os.listdir(folder_path) if f.lower().endswith((".pdf", ".docx", ".xlsx"))
+            ]
+            context.user_data["valid_files_in_folder"] = valid_files_in_folder
+            if not valid_files_in_folder:
+                await query.message.reply_text("No valid files found in the selected knowledge base.")
+                return
+            index_status = llm_service.load_and_index_documents(folder_path)
+            if index_status != "Documents successfully indexed.":
+                logging.error(f"Error during load_and_index_documents: {index_status}")
+                await query.message.reply_text("An error occurred while indexing the documents.")
+                return
+            context.user_data["vector_store_loaded"] = True
+            await query.message.reply_text(f"The knowledge base '{selection}' has been set.")
+        else:
+            await query.message.reply_text("Unknown command.")
 
     @authorized_only
     @initialize_services
@@ -261,7 +256,7 @@ class BotHandlers:
 
         # Check for valid files
         valid_files_in_folder = [
-            f for f in os.listdir(folder_path) if f.endswith((".pdf", ".docx", ".xlsx"))
+            f for f in os.listdir(folder_path) if f.lower().endswith((".pdf", ".docx", ".xlsx"))
         ]
         if not valid_files_in_folder:
             system_response = text.Responses.no_valid_files()
@@ -275,7 +270,9 @@ class BotHandlers:
         context.user_data["valid_files_in_folder"] = valid_files_in_folder
         context.user_data["context_source"] = "folder"  # Set context source as folder
         index_status = llm_service.load_and_index_documents(folder_path)
-        if index_status != text.Responses.documents_indexed():
+
+        # Check if indexing was successful
+        if index_status != "Documents successfully indexed.":
             logging.error(f"Error during load_and_index_documents: {index_status}")
             system_response = text.Responses.indexing_error()
             await update.message.reply_text(system_response)
@@ -285,9 +282,10 @@ class BotHandlers:
 
         context.user_data["vector_store_loaded"] = True
 
-        system_response = (
-            f"Folder path successfully set to: {folder_path}\n\nValid files have been indexed.\n\n"
-        )
+        # Retrieve list of empty documents
+        empty_list = llm_service.get_empty_docs(folder_path)
+
+        system_response = text.Responses.folder_is_set(folder_path, empty_list if empty_list else None)
         await update.message.reply_text(system_response)
 
         # Save folder path in database
@@ -377,11 +375,9 @@ class BotHandlers:
             if not os.path.exists(user_folder):
                 os.makedirs(user_folder)
             else:
-                # Clear existing files in the user folder to ensure context is only with new files
-                for filename in os.listdir(user_folder):
-                    file_path = os.path.join(user_folder, filename)
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
+                # Optionally clear existing files in the user folder
+                # For now, we keep existing files
+                pass
 
             message = update.message
             documents = [message.document] if message.document else message.documents
@@ -391,38 +387,38 @@ class BotHandlers:
                 await update.message.reply_text(system_response)
                 return
 
-            pdf_files = []
-            non_pdf_files = []
+            valid_files = []
+            invalid_files = []
 
             for doc in documents:
-                if doc.mime_type == 'application/pdf':
+                if doc.mime_type in ['application/pdf',
+                                     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
                     if doc.file_size > 20 * 1024 * 1024:
                         system_response = text.Responses.file_too_large()
                         await update.message.reply_text(system_response)
                         return
-                    pdf_files.append(doc)
-                    # Download the PDF file
+                    valid_files.append(doc)
+                    # Download the file
                     file = await context.bot.get_file(doc.file_id)
-                    # Sanitize file name
                     file_name = os.path.basename(doc.file_name)
                     file_path = os.path.join(user_folder, file_name)
                     await file.download_to_drive(custom_path=file_path)
                 else:
-                    non_pdf_files.append(doc)
+                    invalid_files.append(doc)
 
-            # After saving files, set the folder as context folder and index documents
-            if pdf_files:
+            if valid_files:
                 # Update context with folder path and valid files
                 context.user_data["folder_path"] = user_folder
                 context.user_data["context_source"] = "upload"  # Set context source as upload
                 valid_files_in_folder = [
-                    f for f in os.listdir(user_folder) if f.endswith((".pdf", ".docx", ".xlsx"))
+                    f for f in os.listdir(user_folder) if f.lower().endswith((".pdf", ".docx", ".xlsx"))
                 ]
                 context.user_data["valid_files_in_folder"] = valid_files_in_folder
 
                 # Index documents
                 index_status = llm_service.load_and_index_documents(user_folder)
-                if index_status != text.Responses.documents_indexed():
+                if index_status != "Documents successfully indexed.":
                     logging.error(f"Error during load_and_index_documents: {index_status}")
                     system_response = text.Responses.indexing_error()
                     await update.message.reply_text(system_response)
@@ -436,13 +432,13 @@ class BotHandlers:
                 )
 
                 # Generate appropriate messages
-                if not non_pdf_files:
+                if not invalid_files:
                     system_response = text.Responses.upload_success()
                 else:
                     system_response = text.Responses.upload_partial_success()
                 await update.message.reply_text(system_response)
             else:
-                if non_pdf_files and not pdf_files:
+                if invalid_files and not valid_files:
                     system_response = text.Responses.unsupported_files()
                 else:
                     system_response = text.Responses.processing_error()

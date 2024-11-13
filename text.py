@@ -11,6 +11,7 @@ class Greetings:
             "Also, just for reminder another options:\n"
             "/start - Display this introduction message.\n"
             "/status - Display your current settings.\n"
+            "/clear_contex - Clear thr list of documents in context.\n"
         )
 
     @staticmethod
@@ -23,6 +24,7 @@ class Greetings:
             "You can interact with the bot using the following commands:\n\n"
             "/start - Display this introduction message.\n"
             "/status - Display your current settings.\n"
+            "/clear_contex - Clear thr list of documents in context.\n"
         )
 
 
@@ -79,7 +81,7 @@ class Status:
         return (
             f"Status Information:\n\n"
             f"Dear {user_name},\n"
-            "No context has been set yet. You can set it using the /folder command or by sending documents directly to the chat.\n"
+            "No context has been set yet. You can set it using the /knowledge_base command or by sending documents directly to the chat.\n"
         )
 
 

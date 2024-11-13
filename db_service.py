@@ -201,6 +201,18 @@ class DatabaseService:
 
         return folder
 
+    def clear_user_folder(self, user_id):
+        """Clears the last folder path for the user in the database."""
+        try:
+            with self.connect() as connection:
+                with connection.cursor() as cursor:
+                    query = "DELETE FROM folders WHERE user_id = %s;"
+                    cursor.execute(query, (user_id,))
+                connection.commit()
+                print(f"Cleared folder entries for user {user_id}.")
+        except Exception as e:
+            print(f"Error clearing user folder in database: {e}")
+
     def save_event_log(self, user_id, event_type, user_message, system_response, conversation_id):
         try:
             connection = self.connect()

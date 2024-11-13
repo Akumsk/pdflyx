@@ -121,6 +121,7 @@ class BotHandlers:
             BotCommand("start", "Display introduction message"),
             BotCommand("knowledge_base", "Select a knowledge base"),
             BotCommand("status", "Display current status and information"),
+            BotCommand("clear_context", "Clear the current context"),
             BotCommand("request_access", "Request access to the bot"),
             BotCommand("grant_access", "Grant access to a user (Admin only)"),
         ]
@@ -298,7 +299,47 @@ class BotHandlers:
 
         return ConversationHandler.END
 
+    @authorized_only
+    @initialize_services
+    @log_event(event_type='command')
+    async def clear_context(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /clear_context command."""
+        # Clear context data
+        keys_to_clear = [
+            'folder_path', 'vector_store_loaded', 'valid_files_in_folder',
+            'context_source', 'file_id_map', 'conversation_id'
+        ]
+        for key in keys_to_clear:
+            context.user_data.pop(key, None)
 
+        # Clear the vector store
+        llm_service = context.user_data.get("llm_service")
+        if llm_service and hasattr(llm_service, 'vector_store'):
+            llm_service.vector_store = None
+
+        # Optionally, remove any uploaded files from the user's upload folder
+        user_id = context.user_data["user_id"]
+        user_folder = f"user_documents/{user_id}"
+        if os.path.exists(user_folder):
+            for filename in os.listdir(user_folder):
+                file_path = os.path.join(user_folder, filename)
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            # Remove the user folder if empty
+            if not os.listdir(user_folder):
+                os.rmdir(user_folder)
+
+        # Optionally, clear the last folder path from the database
+        db_service = context.user_data["db_service"]
+        db_service.clear_user_folder(user_id)
+
+        system_response = (
+            "Your context has been cleared. You can select a new knowledge base using /knowledge_base or upload new files."
+        )
+        await update.message.reply_text(system_response)
+
+        # Save event log
+        context.user_data['system_response'] = system_response
 
     @authorized_only
     @initialize_services

@@ -34,6 +34,7 @@ def main():
     application.add_handler(CommandHandler("start", handlers.start))
     application.add_handler(CommandHandler("knowledge_base", handlers.knowledge_base))
     application.add_handler(CommandHandler("status", handlers.status))
+    application.add_handler(CommandHandler("clear_context", handlers.clear_context))  # Add this line
 
     # Handle callback queries for knowledge base selection and file downloads
     application.add_handler(CallbackQueryHandler(handlers.set_knowledge_base, pattern=r'^set_knowledge:'))

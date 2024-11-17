@@ -53,17 +53,24 @@ class DatabaseService:
 
             for item in metadata_list:
                 # Convert date_modified from string to datetime object
-                date_modified = datetime.strptime(item['date_modified'], '%Y-%m-%d %H:%M:%S')
-                date_of_analysis = datetime.utcnow()  # Current timestamp for analysis time
+                date_modified = datetime.strptime(
+                    item["date_modified"], "%Y-%m-%d %H:%M:%S"
+                )
+                date_of_analysis = (
+                    datetime.utcnow()
+                )  # Current timestamp for analysis time
 
-                cursor.execute(insert_query, (
-                    item['filename'],
-                    item['path_file'],
-                    item['document_type'],
-                    date_modified,
-                    date_of_analysis,
-                    item['description']
-                ))
+                cursor.execute(
+                    insert_query,
+                    (
+                        item["filename"],
+                        item["path_file"],
+                        item["document_type"],
+                        date_modified,
+                        date_of_analysis,
+                        item["description"],
+                    ),
+                )
 
             connection.commit()
             print("Metadata saved successfully.")
@@ -213,7 +220,9 @@ class DatabaseService:
         except Exception as e:
             print(f"Error clearing user folder in database: {e}")
 
-    def save_event_log(self, user_id, event_type, user_message, system_response, conversation_id):
+    def save_event_log(
+        self, user_id, event_type, user_message, system_response, conversation_id
+    ):
         try:
             connection = self.connect()
             cursor = connection.cursor()
@@ -235,16 +244,16 @@ class DatabaseService:
             connection.close()
 
     def log_exception(
-            self,
-            exception_type,
-            exception_message,
-            stack_trace,
-            occurred_at,
-            user_id,
-            data_context,
-            resolved,
-            resolved_at=None,
-            resolver_notes=None,
+        self,
+        exception_type,
+        exception_message,
+        stack_trace,
+        occurred_at,
+        user_id,
+        data_context,
+        resolved,
+        resolved_at=None,
+        resolver_notes=None,
     ):
         connection = None
         cursor = None
@@ -380,7 +389,7 @@ class DatabaseService:
             cursor = connection.cursor()
             cursor.execute(
                 "SELECT access FROM users WHERE user_id = %s AND is_active = True",
-                (user_id,)
+                (user_id,),
             )
             result = cursor.fetchone()
             if result:
@@ -408,7 +417,7 @@ class DatabaseService:
                     language_code = EXCLUDED.language_code,
                     last_active = EXCLUDED.last_active
                 """,
-                (user_id, user_name, language_code, now, now)
+                (user_id, user_name, language_code, now, now),
             )
             print("User info saved/updated successfully.")
         except Exception as e:
@@ -424,8 +433,7 @@ class DatabaseService:
             connection = self.connect()
             cursor = connection.cursor()
             cursor.execute(
-                "UPDATE users SET last_active = %s WHERE user_id = %s",
-                (now, user_id)
+                "UPDATE users SET last_active = %s WHERE user_id = %s", (now, user_id)
             )
             print("User last_active updated.")
         except Exception as e:
@@ -440,8 +448,7 @@ class DatabaseService:
             connection = self.connect()
             cursor = connection.cursor()
             cursor.execute(
-                "UPDATE users SET access = True WHERE user_id = %s",
-                (user_id,)
+                "UPDATE users SET access = True WHERE user_id = %s", (user_id,)
             )
             print(f"Access granted to user {user_id}.")
         except Exception as e:

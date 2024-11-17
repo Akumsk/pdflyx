@@ -1,6 +1,7 @@
-# auth.py
+# auth/auth.py
 
 from db_service import DatabaseService
+
 
 class AuthService:
     def __init__(self):

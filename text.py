@@ -1,202 +1,392 @@
 # text.py
 
+
 class Greetings:
 
     @staticmethod
     def welcome_back(user_name):
         return (
-            f"Welcome back, {user_name}!\n\n"
-            "You can select construction /knowledge_base and ask any question on it.\n"
-            "Or just upload PDF document as attachment and ask the question.\n"
-            "Also, just for reminder another options:\n"
-            "/start - Display this introduction message.\n"
-            "/status - Display your current settings.\n"
-            "/clear_contex - Clear thr list of documents in context.\n"
+            f"Welcome back, {user_name}! 👋\n\n"
+            "I'm here to help you with your construction and design questions. Here's what we can do together:\n\n"
+            "📚 Browse our /knowledge_base of construction regulations\n"
+            "📎 Upload any PDF document and ask me questions about it\n\n"
+            "Quick commands at your service:\n"
+            "🔄 /start - See this welcome message again\n"
+            "⚙️ /status - Check your current settings\n"
+            "🗑️ /clear_context - Start fresh by clearing your document history\n\n"
+            "What would you like to explore today?"
         )
 
     @staticmethod
     def first_time():
         return (
-            "👋 **Hello! I'm your friendly assistant.**\n\n"
-            "You can send me any PDF file and ask me questions about it.\n"
-            "I also have a large collection of construction regulation documents ready to help you "
-            "by /knowledge_base command.\n"
-            "You can interact with the bot using the following commands:\n\n"
-            "/start - Display this introduction message.\n"
-            "/status - Display your current settings.\n"
-            "/clear_contex - Clear thr list of documents in context.\n"
+            "👋 **Hello! I'm your design assistant**\n\n"
+            "I'm here to help architects, designers, and engineers navigate construction regulations "
+            "and technical documentation.\n\n"
+            "Here's how I can assist you:\n\n"
+            "📚 Access construction regulations through our /knowledge_base\n"
+            "📎 Share any PDF document, and I'll help you understand its contents\n"
+            "❓ Ask questions in plain language - I'll handle the technical details\n\n"
+            "Helpful commands to get started:\n"
+            "🔄 /start - See this introduction again\n"
+            "⚙️ /status - View your current settings\n"
+            "🗑️ /clear_context - Reset your document history\n\n"
+            "What would you like to know about?"
         )
 
 
 class Status:
     @staticmethod
-    def folder_set(user_name, folder_path, file_list, empty_list=None):
+    def knowledge_base_set(user_name, knowledge_base_name, file_list, empty_list=None):
         response = (
-            f"Status Information:\n\n"
-            f"Dear {user_name},\n"
-            f"The folder path is currently set to: {folder_path}\n\n"
-            f"Valid Files:\n{file_list}\n\n"
+            f"📊 <b>Current Status</b>\n\n"
+            f"Hi {user_name}! Here's your workspace setup:\n\n"
+            f"📚 <b>Active Knowledge Base:</b> {knowledge_base_name}\n\n"
+            f"📋 <b>Available Documents:</b>\n{file_list}\n\n"
         )
         if empty_list:
             empty_files = "\n".join(empty_list)
             response += (
-                f"⚠️ **Note:** Some uploaded files are corrupted or contain unreadable pages:\n{empty_files}\n\n"
-                f"Please review these files to ensure they are correctly formatted."
+                f"⚠️ <b>Attention Needed</b>\n"
+                f"The following documents need your attention:\n{empty_files}\n\n"
+                f"💡 Tip: Make sure these files are in PDF format and properly readable. "
+                f"Feel free to upload them again!"
             )
         return response
 
     @staticmethod
-    def folder_no_files(user_name, folder_path):
+    def knowledge_base_no_files(user_name, knowledge_base_name):
         return (
-            f"Status Information:\n\n"
-            f"Dear {user_name},\n"
-            f"The folder path is currently set to: {folder_path}, but no valid files were found.\n"
+            f"📊 <b>Knowledge Base Status</b>\n\n"
+            f"Hi {user_name}!\n\n"
+            f"You're currently working with the '<i>{knowledge_base_name}</i>' knowledge base, "
+            f"but I don't see any valid documents yet.\n\n"
+            f"💡 Need help? Try:\n"
+            f"• Selecting a different knowledge base\n"
+            f"• Uploading your own documents\n"
+            f"• Checking file formats (PDF recommended)"
         )
 
+    @staticmethod
+    def no_knowledge_base_selected(user_name):
+        return (
+            f"📊 <b>Workspace Status</b>\n\n"
+            f"Hi {user_name}!\n\n"
+            f"Looks like we haven't selected a knowledge base yet.\n\n"
+            f"💡 Quick Start:\n"
+            f"1. Use /knowledge_base to explore available topics\n"
+            f"2. Select the area that matches your needs\n"
+            f"3. Start asking questions!\n\n"
+            f"Need something specific? Just let me know! 👋"
+        )
+
+    @staticmethod
     def upload_set(user_name, file_list, empty_list=None):
         response = (
-            f"Status Information:\n\n"
-            f"Dear {user_name},\n"
-            f"Documents sent to the chat are used as context.\n\n"
-            f"Valid Files:\n{file_list}\n\n"
+            f"📊 <b>Document Status</b>\n\n"
+            f"Hi {user_name}!\n\n"
+            f"I'm working with your uploaded documents:\n\n"
+            f"📋 <b>Active Documents:</b>\n{file_list}\n\n"
         )
         if empty_list:
             empty_files = "\n".join(empty_list)
             response += (
-                f"⚠️ **Note:** Some uploaded files are corrupted or contain unreadable pages:\n{empty_files}\n\n"
-                f"Please review these files to ensure they are correctly formatted."
+                f"⚠️ <b>Document Issues Detected</b>\n"
+                f"These files need attention:\n{empty_files}\n\n"
+                f"💡 Quick Fix Tips:\n"
+                f"• Check if files are in PDF format\n"
+                f"• Ensure files aren't password-protected\n"
+                f"• Try re-uploading the document\n\n"
+                f"Need help? Just ask! 🤝"
             )
         return response
 
     @staticmethod
     def upload_no_files(user_name):
         return (
-            f"Status Information:\n\n"
-            f"Dear {user_name},\n"
-            f"Documents sent to the chat are used as context, but no valid files were found.\n"
+            f"📊 <b>Document Status</b>\n\n"
+            f"Hi {user_name}!\n\n"
+            f"I'm ready to work with your documents, but I don't see any valid files yet.\n\n"
+            f"💡 You can:\n"
+            f"• Upload PDF documents directly to our chat\n"
+            f"• Use /knowledge_base to access standard regulations\n"
+            f"• Ask me questions about any construction topic\n\n"
+            f"Need guidance? I'm here to help! 🤝"
         )
 
     @staticmethod
     def no_context(user_name):
         return (
-            f"Status Information:\n\n"
-            f"Dear {user_name},\n"
-            "No context has been set yet. You can set it using the /knowledge_base command or by sending documents directly to the chat.\n"
+            f"📊 <b>Workspace Status</b>\n\n"
+            f"Hi {user_name}!\n\n"
+            f"Your workspace is ready, but we haven't loaded any documents yet.\n\n"
+            f"💡 Let's get started:\n"
+            f"1. Upload PDF documents directly to our chat, or\n"
+            f"2. Use /knowledge_base to access construction regulations\n\n"
+            f"Which would you prefer to explore first? 🤔"
         )
 
 
 class Responses:
     @staticmethod
     def request_access():
-        return "Please provide the folder path for your documents:"
+        return "📂 To get started, please share the folder path where your documents are stored:"
 
     @staticmethod
     def grant_access_success(user_id):
-        return f"User {user_id} has been granted access."
+        return (
+            f"✅ Access granted to user {user_id}! They can now use all bot features."
+        )
 
     @staticmethod
     def grant_access_usage():
-        return "Usage: /grant_access <user_id>"
+        return "ℹ️ To grant access, use: /grant_access <user_id>"
 
     @staticmethod
     def access_denied():
-        return "You do not have access, please use /request_access."
+        return (
+            "🔒 Access needed!\n\n"
+            "To start using the bot, please use /request_access to get permission.\n"
+            "An admin will review your request shortly."
+        )
 
     @staticmethod
     def access_requested():
-        return "Your access request has been sent to the admin."
+        return (
+            "📫 Access Request Sent!\n\n"
+            "Your request has been forwarded to our admin team.\n"
+            "You'll receive a notification once access is granted."
+        )
 
     @staticmethod
     def unauthorized_action():
-        return "You are not authorized to perform this action."
+        return (
+            "🔒 Authorization Required\n\n"
+            "You'll need additional permissions for this action.\n"
+            "Please contact your administrator for assistance."
+        )
 
     @staticmethod
     def invalid_folder_path():
-        return "Invalid folder path. Please provide a valid path."
+        return (
+            "⚠️ Folder Path Issue\n\n"
+            "I couldn't find the folder you specified.\n"
+            "Please check the path and try again.\n\n"
+            "💡 Tip: Make sure the path is complete and correctly formatted."
+        )
 
     @staticmethod
     def no_valid_files():
-        return "No valid files found in the folder. Please provide a folder containing valid documents."
+        return (
+            "📂 Empty Folder Found\n\n"
+            "I couldn't find any valid documents in this folder.\n\n"
+            "💡 Please ensure:\n"
+            "• The folder contains PDF files\n"
+            "• Files aren't password-protected\n"
+            "• Files are readable and not corrupted"
+        )
 
     @staticmethod
     def documents_indexed():
-        return "Documents successfully indexed."
+        return (
+            "✅ Success!\n\n"
+            "All documents have been indexed and are ready for your questions.\n"
+            "What would you like to know about them?"
+        )
 
     @staticmethod
     def folder_is_set(folder_path, empty_list=None):
         response = (
-            f"📁 **Folder Path Set Successfully:**\n\n"
-            f"Folder path: {folder_path}\n"
-            f"Valid files have been indexed.\n"
+            f"📁 **Folder Successfully Connected!**\n\n"
+            f"📍 Location: {folder_path}\n\n"
+            f"✅ Your documents are ready for queries!\n"
         )
         if empty_list:
             empty_files = "\n".join(empty_list)
             response += (
-                f"\n⚠️ **Note:** Some files are corrupted or contain empty pages:\n{empty_files}\n"
-                f"Please review these files to ensure they are correctly formatted.\n"
-                f"Use the /status command to view detailed information."
+                f"\n⚠️ **Attention Needed**\n"
+                f"These files need a quick check:\n{empty_files}\n\n"
+                f"💡 Quick Tips:\n"
+                f"• Verify PDF format\n"
+                f"• Check for password protection\n"
+                f"• Ensure files aren't corrupted\n\n"
+                f"Use /status for more details."
             )
         else:
-            response += "\nAll files have been successfully indexed without any issues."
+            response += "\n🎉 Perfect! All files are properly indexed and ready to use."
         return response
-
 
     @staticmethod
     def indexing_error():
-        return "An error occurred while loading and indexing your documents. Please try again later."
+        return (
+            "⚠️ Indexing Issue\n\n"
+            "I encountered a problem while processing your documents.\n\n"
+            "💡 Please try:\n"
+            "• Checking file permissions\n"
+            "• Ensuring files aren't in use\n"
+            "• Trying again in a few moments"
+        )
 
     @staticmethod
     def upload_success():
         return (
-            "Your documents have been uploaded and indexed successfully. "
-            "You may now ask any questions related to these documents."
+            "✅ Upload Complete!\n\n"
+            "Your documents are successfully indexed and ready to use.\n"
+            "What would you like to know about them? 🤔"
         )
 
     @staticmethod
     def upload_partial_success():
         return (
-            "You have selected different file types. Only the PDF files have been uploaded and indexed. "
-            "You may now ask any questions related to these PDF documents."
+            "📄 Partial Upload Complete\n\n"
+            "I've indexed all PDF files you've sent.\n\n"
+            "💡 Note: Only PDF files are supported. Other file types were skipped.\n\n"
+            "Ready for your questions about the PDF documents! 🤓"
         )
 
     @staticmethod
     def unsupported_files():
         return (
-            "I'm sorry, but only PDF files are supported. Please upload your documents in PDF format."
+            "⚠️ Unsupported File Type\n\n"
+            "I can only work with PDF files at the moment.\n\n"
+            "💡 Please convert your documents to PDF format and try again."
         )
 
     @staticmethod
     def processing_error():
         return (
-            "I'm sorry, but I couldn't process the files you sent. "
-            "Please ensure they are in PDF format and try again."
+            "⚠️ Processing Issue\n\n"
+            "I couldn't read your files properly.\n\n"
+            "💡 Please check:\n"
+            "• Files are in PDF format\n"
+            "• PDFs aren't password-protected\n"
+            "• Files aren't corrupted"
         )
 
     @staticmethod
     def generic_error():
         return (
-            "An unexpected error occurred while processing your files. Please try again later."
+            "⚠️ Unexpected Issue\n\n"
+            "Something went wrong while processing your request.\n\n"
+            "💡 Please try:\n"
+            "• Waiting a moment\n"
+            "• Trying again\n"
+            "• Contacting support if the issue persists"
         )
 
     @staticmethod
     def no_files_received():
         return (
-            "I'm sorry, but I didn't receive any files. Please attach your documents and try again."
+            "📎 No Files Found\n\n"
+            "I haven't received any files with your message.\n\n"
+            "💡 To share documents:\n"
+            "• Click the attachment icon\n"
+            "• Select your PDF files\n"
+            "• Send them in the chat"
         )
 
     @staticmethod
     def file_too_large():
-        return "I'm sorry, but I couldn't process the file more than 20Mb. Please upload PDF files less than 20Mb."
+        return (
+            "⚠️ File Size Limit Exceeded\n\n"
+            "Files must be under 20MB to process.\n\n"
+            "💡 Try:\n"
+            "• Compressing the PDF\n"
+            "• Splitting into smaller files\n"
+            "• Removing unnecessary pages"
+        )
+
+
+class KnowledgeBaseResponses:
+    @staticmethod
+    def unknown_knowledge_base():
+        return (
+            "❓ Unknown Knowledge Base\n\n"
+            "I couldn't find the knowledge base you selected.\n\n"
+            "💡 Available options:\n"
+            "• Building Codes\n"
+            "• Residential Design\n"
+            "• Commercial Construction\n"
+            "• Sustainable Building\n"
+            "• MEP Systems\n\n"
+            "Use /knowledge_base to see all available categories."
+        )
+
+    @staticmethod
+    def no_valid_files_in_knowledge_base():
+        return (
+            "📂 Empty Knowledge Base\n\n"
+            "The selected knowledge base appears to be empty or contains no readable files.\n\n"
+            "💡 You can:\n"
+            "• Select a different knowledge base\n"
+            "• Upload your own documents\n"
+            "• Contact support if you believe this is an error\n\n"
+            "Need help? Just ask! 🤝"
+        )
+
+    @staticmethod
+    def indexing_error():
+        return (
+            "⚠️ Indexing Issue\n\n"
+            "I encountered a problem while preparing the knowledge base documents.\n\n"
+            "💡 Quick fixes:\n"
+            "• Try selecting the knowledge base again\n"
+            "• Wait a few moments and retry\n"
+            "• Choose a different knowledge base\n\n"
+            "If the problem persists, please let me know. 🔧"
+        )
+
+    @staticmethod
+    def knowledge_base_set_success(knowledge_base_name):
+        return (
+            f"✅ Knowledge Base Connected!\n\n"
+            f"📚 Now using: {knowledge_base_name}\n\n"
+            f"💡 You can:\n"
+            f"• Ask questions about regulations\n"
+            f"• Request specific information\n"
+            f"• Search for standards\n\n"
+            f"What would you like to know about? 🤔"
+        )
+
+    @staticmethod
+    def unknown_command():
+        return (
+            "❓ Unknown Command\n\n"
+            "I don't recognize that command.\n\n"
+            "💡 Available commands:\n"
+            "• /start - Get started\n"
+            "• /knowledge_base - Browse regulations\n"
+            "• /status - Check your settings\n"
+            "• /clear_context - Reset documents\n\n"
+            "Need help? Just ask! 🤝"
+        )
 
 
 class FileResponses:
     @staticmethod
     def file_not_found():
-        return "File not found."
+        return (
+            "🔍 File Not Found\n\n"
+            "I couldn't locate the file you're looking for.\n\n"
+            "💡 Common solutions:\n"
+            "• Check if the file name is correct\n"
+            "• Verify the file hasn't been moved or deleted\n"
+            "• Try uploading the file again\n"
+            "• Use /status to see your available files\n\n"
+            "Need help finding something specific? Let me know! 🤝"
+        )
 
     @staticmethod
     def send_file_error():
-        return "An error occurred while sending the file."
+        return (
+            "⚠️ File Sharing Issue\n\n"
+            "I encountered a problem while trying to send the file.\n\n"
+            "💡 Please try:\n"
+            "• Waiting a moment and requesting again\n"
+            "• Checking if the file isn't too large (max 20MB)\n"
+            "• Verifying file permissions\n\n"
+            "Still having trouble? I can help you find an alternative solution! 🔧"
+        )
 
     @staticmethod
     def folder_not_set():

@@ -17,10 +17,11 @@ def messages_to_langchain_messages(chat_history_texts):
 
     return chat_history
 
+
 def current_timestamp():
     date_time = (
-            datetime.now().date().strftime("%Y-%m-%d")
-            + ", "
-            + datetime.now().time().strftime("%H:%M:%S")
+        datetime.now().date().strftime("%Y-%m-%d")
+        + ", "
+        + datetime.now().time().strftime("%H:%M:%S")
     )
     return date_time

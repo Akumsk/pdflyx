@@ -13,6 +13,7 @@ from db_service import DatabaseService
 # Initialize the DatabaseService
 db_service = DatabaseService()
 
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Log the error and send a message to notify the developer."""
     # Log the error before we do anything else
@@ -22,7 +23,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exception_id = str(uuid.uuid4())
     exception_type = type(context.error).__name__
     exception_message = str(context.error)
-    stack_trace = ''.join(traceback.format_exception(None, context.error, context.error.__traceback__))
+    stack_trace = "".join(
+        traceback.format_exception(None, context.error, context.error.__traceback__)
+    )
     occurred_at = datetime.now()
     user_id = update.effective_user.id if update and update.effective_user else None
     data_context = str(update.to_dict()) if update else "No update available"
@@ -41,7 +44,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Notify the user
     if update and update.message:
-        await update.message.reply_text("An unexpected error occurred. The support team has been notified.")
+        await update.message.reply_text(
+            "An unexpected error occurred. The support team has been notified."
+        )
+
 
 def handle_telegram_context_length_exceeded_error(error, user_id, data_context):
     exception_id = str(uuid.uuid4())

@@ -22,6 +22,7 @@ from exception_handlers import (
     error_handler,
 )
 
+
 def main():
     logging.basicConfig(level=logging.INFO)
 
@@ -34,14 +35,22 @@ def main():
     application.add_handler(CommandHandler("start", handlers.start))
     application.add_handler(CommandHandler("knowledge_base", handlers.knowledge_base))
     application.add_handler(CommandHandler("status", handlers.status))
-    application.add_handler(CommandHandler("clear_context", handlers.clear_context))  # Add this line
+    application.add_handler(
+        CommandHandler("clear_context", handlers.clear_context)
+    )  # Add this line
 
     # Handle callback queries for knowledge base selection and file downloads
-    application.add_handler(CallbackQueryHandler(handlers.set_knowledge_base, pattern=r'^set_knowledge:'))
-    application.add_handler(CallbackQueryHandler(handlers.send_file, pattern=r'^get_file:'))
+    application.add_handler(
+        CallbackQueryHandler(handlers.set_knowledge_base, pattern=r"^set_knowledge:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(handlers.send_file, pattern=r"^get_file:")
+    )
 
     # Handler for file download
-    application.add_handler(CallbackQueryHandler(handlers.send_file, pattern=r'^get_file:'))
+    application.add_handler(
+        CallbackQueryHandler(handlers.send_file, pattern=r"^get_file:")
+    )
 
     # Handlers for access control
     application.add_handler(CommandHandler("request_access", handlers.request_access))

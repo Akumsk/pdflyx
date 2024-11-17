@@ -10,7 +10,11 @@ import fitz
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain_core.messages import HumanMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+    PromptTemplate,
+)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -27,6 +31,7 @@ from helpers import current_timestamp
 
 class LLMService:
     vector_store = None  # Class variable to store the vector store
+
     def __init__(self, model_name=MODEL_NAME):
         self.llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name=model_name)
 
@@ -79,7 +84,9 @@ class LLMService:
             chat_history = []
 
         # Create the retriever with k=DOCS_IN_RETRIEVER
-        retriever = LLMService.vector_store.as_retriever(search_kwargs={'k': DOCS_IN_RETRIEVER})
+        retriever = LLMService.vector_store.as_retriever(
+            search_kwargs={"k": DOCS_IN_RETRIEVER}
+        )
 
         # Create the history-aware retriever
         retriever_prompt = ChatPromptTemplate.from_messages(
@@ -99,13 +106,14 @@ class LLMService:
 
         # Create the question-answering chain
         system_prompt = (
-            "You are a project assistant from consultant side on design and construction projects. "
-            "Use the following pieces of retrieved context to answer "
-            "the question. If you don't know the answer, say that you "
-            "don't know. Do not include references to the source documents in your answer. "
-            f"Don't know. If you need to use current date, today is {current_timestamp()}. "
-            "If Prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
-            " \n\n{context}"
+            "You are a project assistant from the consultant side on design and construction projects. "
+            "Use the following pieces of retrieved context to answer the question. "
+            "Your response should be formatted in HTML, using appropriate tags for headings, bold text, paragraphs, and lists as needed. "
+            "If you don't know the answer, say that you don't know. "
+            "Do not include references to the source documents in your answer. "
+            f"If you need to use the current date, today is {current_timestamp()}. "
+            "If the prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
+            "\n\n{context}"
         )
 
         prompt_template = ChatPromptTemplate.from_messages(
@@ -143,8 +151,8 @@ class LLMService:
         # Build the references
         references = {}
         for doc in sources:
-            filename = doc.metadata.get('source', 'Unknown')
-            page = doc.metadata.get('page', 'Unknown')
+            filename = doc.metadata.get("source", "Unknown")
+            page = doc.metadata.get("page", "Unknown")
             if filename not in references:
                 references[filename] = set()
             references[filename].add(page)
@@ -158,11 +166,13 @@ class LLMService:
         is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)
 
         if is_relevant:
-            answer_with_references = answer + "\n\n------------------" + "\nReferences:\n"
+            answer_with_references = (
+                answer + "\n\n------------------" + "\nReferences:\n"
+            )
 
             for doc_name, pages in references.items():
                 pages_list = sorted(pages)
-                pages_str = ', '.join(str(page) for page in pages_list)
+                pages_str = ", ".join(str(page) for page in pages_list)
                 answer_with_references += f"{doc_name}, pages: {pages_str}\n"
 
             return answer_with_references, source_files
@@ -179,7 +189,7 @@ class LLMService:
         prompt_keywords = set(prompt.lower().split())
 
         # Extract keywords from the sources
-        source_text = ' '.join([doc.page_content.lower() for doc in sources])
+        source_text = " ".join([doc.page_content.lower() for doc in sources])
         source_keywords = set(source_text.split())
 
         # Calculate overlap
@@ -221,7 +231,9 @@ class LLMService:
 
                             if not text:
                                 # Empty page found
-                                print(f"Empty content on page {page_num} of document {filename}")
+                                print(
+                                    f"Empty content on page {page_num} of document {filename}"
+                                )
                                 empty_docs.append(filename)
                                 break  # No need to check further pages in this document
 
@@ -233,6 +245,7 @@ class LLMService:
 
     def get_metadata(self, folder_path, db_service):
         from langchain.schema import HumanMessage
+
         metadata_list = []
         existing_file_paths = []
 
@@ -246,7 +259,7 @@ class LLMService:
             # Get the last modified time of the file from filesystem
             timestamp = os.path.getmtime(file_path)
             file_date_modified = datetime.datetime.fromtimestamp(timestamp)
-            date_modify_str = file_date_modified.strftime('%Y-%m-%d %H:%M:%S')
+            date_modify_str = file_date_modified.strftime("%Y-%m-%d %H:%M:%S")
 
             # Get dates from database
             db_date_modified, date_of_analysis = db_service.get_file_dates(file_path)
@@ -266,7 +279,7 @@ class LLMService:
             if filename.endswith(".pdf"):
                 loader = PyMuPDFLoader(file_path)
                 docs = loader.load()
-                content = ' '.join([doc.page_content for doc in docs])
+                content = " ".join([doc.page_content for doc in docs])
 
             elif filename.endswith(".docx"):
                 content = self.load_word_file(file_path)
@@ -292,23 +305,25 @@ class LLMService:
             response = self.llm.invoke([HumanMessage(content=prompt)]).content
 
             # Extract description and document type from response
-            document_type = ''
-            description = ''
-            lines = response.strip().split('\n')
+            document_type = ""
+            description = ""
+            lines = response.strip().split("\n")
             for line in lines:
-                if line.lower().startswith('document type:'):
-                    document_type = line[len('document type:'):].strip()
-                elif line.lower().startswith('description:'):
-                    description = line[len('description:'):].strip()
+                if line.lower().startswith("document type:"):
+                    document_type = line[len("document type:") :].strip()
+                elif line.lower().startswith("description:"):
+                    description = line[len("description:") :].strip()
 
             # Append metadata as a dictionary to the list
-            metadata_list.append({
-                'filename': filename,
-                'path_file': file_path,
-                'document_type': document_type,
-                'date_modified': date_modify_str,
-                'description': description
-            })
+            metadata_list.append(
+                {
+                    "filename": filename,
+                    "path_file": file_path,
+                    "document_type": document_type,
+                    "date_modified": date_modify_str,
+                    "description": description,
+                }
+            )
 
             # After processing all files, mark files as deleted if they are not in the folder
             db_service.mark_files_as_deleted(existing_file_paths)

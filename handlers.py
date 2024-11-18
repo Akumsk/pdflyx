@@ -49,13 +49,12 @@ def authorized_only(func):
 
         # Check if user has access
         if not db_service.check_user_access(user_id):
+            system_response = text.Responses.access_denied()
             if update.message:
-                await update.message.reply_text(
-                    "You do not have access, please use /request_access."
-                )
+                await update.message.reply_text(system_response)
             elif update.callback_query:
                 await update.callback_query.answer(
-                    "You do not have access, please use /request_access.",
+                    system_response,
                     show_alert=True,
                 )
             return
@@ -92,14 +91,12 @@ def ensure_documents_indexed(func):
         self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
     ):
         if not context.user_data.get("vector_store_loaded", False):
-            system_response = (
-                "Documents are not indexed yet. Use /knowledge_base first."
-            )
+            system_response = text.ContextErrors.documents_not_indexed()
             await update.message.reply_text(system_response)
             return ConversationHandler.END
         valid_files_in_folder = context.user_data.get("valid_files_in_folder", [])
         if not valid_files_in_folder:
-            system_response = "No valid documents found in the folder. Please add documents to the folder."
+            system_response = text.ContextErrors.no_valid_documents()
             await update.message.reply_text(system_response)
             return ConversationHandler.END
         return await func(self, update, context, *args, **kwargs)
@@ -251,8 +248,9 @@ class BotHandlers:
             for kb_name in knowledge_base_paths.keys()
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        system_response = text.KnowledgeBaseResponses.select_knowledge_base()
         await update.message.reply_text(
-            "Please select a knowledge base:", reply_markup=reply_markup
+            system_response, reply_markup=reply_markup
         )
 
     @authorized_only
@@ -408,7 +406,7 @@ class BotHandlers:
         db_service = context.user_data["db_service"]
         db_service.clear_user_folder(user_id)
 
-        system_response = "Your context has been cleared. You can select a new knowledge base using /knowledge_base or upload new files."
+        system_response = text.Responses.context_cleared()
         await update.message.reply_text(system_response)
 
         # Save event log
@@ -613,7 +611,8 @@ class BotHandlers:
             else:
                 await query.message.reply_text(text.FileResponses.folder_not_set())
         else:
-            await query.message.reply_text("Unknown command.")
+            system_response = text.Responses.unknown_command()
+            await query.message.reply_text(system_response)
 
     @log_event(event_type="command")
     async def request_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

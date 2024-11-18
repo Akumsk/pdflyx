@@ -178,12 +178,9 @@ class Responses:
     @staticmethod
     def no_valid_files():
         return (
-            "📂 Empty Folder Found\n\n"
-            "I couldn't find any valid documents in this folder.\n\n"
-            "💡 Please ensure:\n"
-            "• The folder contains PDF files\n"
-            "• Files aren't password-protected\n"
-            "• Files are readable and not corrupted"
+            "📂 No Valid Documents Found\n\n"
+            "I couldn't find any documents to work with in that folder.\n"
+            "Please ensure the folder contains PDF, DOCX, or XLSX files."
         )
 
     @staticmethod
@@ -204,13 +201,11 @@ class Responses:
         if empty_list:
             empty_files = "\n".join(empty_list)
             response += (
-                f"\n⚠️ **Attention Needed**\n"
-                f"These files need a quick check:\n{empty_files}\n\n"
-                f"💡 Quick Tips:\n"
-                f"• Verify PDF format\n"
+                f"\n⚠️ Some files need attention:\n{empty_files}\n\n"
+                f"💡 Tips:\n"
+                f"• Ensure files are in PDF format\n"
                 f"• Check for password protection\n"
-                f"• Ensure files aren't corrupted\n\n"
-                f"Use /status for more details."
+                f"• Try re-uploading if necessary\n"
             )
         else:
             response += "\n🎉 Perfect! All files are properly indexed and ready to use."
@@ -219,12 +214,8 @@ class Responses:
     @staticmethod
     def indexing_error():
         return (
-            "⚠️ Indexing Issue\n\n"
-            "I encountered a problem while processing your documents.\n\n"
-            "💡 Please try:\n"
-            "• Checking file permissions\n"
-            "• Ensuring files aren't in use\n"
-            "• Trying again in a few moments"
+            "⚠️ Oops! Something went wrong while preparing your documents.\n"
+            "Please try again in a few moments."
         )
 
     @staticmethod
@@ -296,20 +287,36 @@ class Responses:
             "• Removing unnecessary pages"
         )
 
+    @staticmethod
+    def context_cleared():
+        return (
+            "🗑️ Your workspace has been reset.\n\n"
+            "You can now select a new knowledge base using /knowledge_base or upload new documents.\n\n"
+            "What would you like to do next?"
+        )
+
+    @staticmethod
+    def unknown_command():
+        return (
+            "❓ I'm not sure what you mean.\n\n"
+            "💡 You can try:\n"
+            "• Using /help to see available commands\n"
+            "• Asking me a question about construction or design\n"
+            "• Uploading a document for me to analyze"
+        )
+
 
 class KnowledgeBaseResponses:
     @staticmethod
     def unknown_knowledge_base():
         return (
-            "❓ Unknown Knowledge Base\n\n"
-            "I couldn't find the knowledge base you selected.\n\n"
-            "💡 Available options:\n"
-            "• Building Codes\n"
-            "• Residential Design\n"
-            "• Commercial Construction\n"
-            "• Sustainable Building\n"
-            "• MEP Systems\n\n"
-            "Use /knowledge_base to see all available categories."
+            "📂 Empty Knowledge Base\n\n"
+            "The selected knowledge base appears to be empty or contains no readable files.\n\n"
+            "💡 You can:\n"
+            "• Select a different knowledge base\n"
+            "• Upload your own documents\n"
+            "• Contact support if you believe this is an error\n\n"
+            "Need help? Just ask! 🤝"
         )
 
     @staticmethod
@@ -327,13 +334,8 @@ class KnowledgeBaseResponses:
     @staticmethod
     def indexing_error():
         return (
-            "⚠️ Indexing Issue\n\n"
-            "I encountered a problem while preparing the knowledge base documents.\n\n"
-            "💡 Quick fixes:\n"
-            "• Try selecting the knowledge base again\n"
-            "• Wait a few moments and retry\n"
-            "• Choose a different knowledge base\n\n"
-            "If the problem persists, please let me know. 🔧"
+            "⚠️ Oops! Something went wrong while preparing the knowledge base documents.\n"
+            "Please try again in a few moments."
         )
 
     @staticmethod
@@ -351,14 +353,17 @@ class KnowledgeBaseResponses:
     @staticmethod
     def unknown_command():
         return (
-            "❓ Unknown Command\n\n"
-            "I don't recognize that command.\n\n"
-            "💡 Available commands:\n"
-            "• /start - Get started\n"
-            "• /knowledge_base - Browse regulations\n"
-            "• /status - Check your settings\n"
-            "• /clear_context - Reset documents\n\n"
-            "Need help? Just ask! 🤝"
+            "❓ I'm not sure what you mean.\n\n"
+            "💡 You can try:\n"
+            "• Using /help to see available commands\n"
+            "• Asking me a question about construction or design\n"
+            "• Uploading a document for me to analyze"
+        )
+
+    @staticmethod
+    def select_knowledge_base():
+        return (
+            "Please choose a knowledge base to explore:"
         )
 
 
@@ -390,4 +395,24 @@ class FileResponses:
 
     @staticmethod
     def folder_not_set():
-        return "Folder path not set."
+        return (
+            "Oops! It looks like we haven't set up your documents yet.\n"
+            "Please select a knowledge base using /knowledge_base or upload some files."
+        )
+
+class ContextErrors:
+    @staticmethod
+    def documents_not_indexed():
+        return (
+            "📚 Let's Get Started!\n\n"
+            "It seems we haven't set up any documents yet.\n"
+            "Please use /knowledge_base to choose a topic or upload some files to get started."
+        )
+
+    @staticmethod
+    def no_valid_documents():
+        return (
+            "📂 No Documents Found\n\n"
+            "I couldn't find any documents to work with.\n"
+            "Please make sure you've added some files to your folder or upload them here."
+        )

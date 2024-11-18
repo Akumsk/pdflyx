@@ -32,37 +32,33 @@ def main():
         ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(handlers.post_init).build()
     )
 
+    # Command Handlers
     application.add_handler(CommandHandler("start", handlers.start))
     application.add_handler(CommandHandler("knowledge_base", handlers.knowledge_base))
     application.add_handler(CommandHandler("status", handlers.status))
-    application.add_handler(
-        CommandHandler("clear_context", handlers.clear_context)
-    )  # Add this line
+    application.add_handler(CommandHandler("language", handlers.language))
+    application.add_handler(CommandHandler("clear_context", handlers.clear_context))
+    application.add_handler(CommandHandler("request_access", handlers.request_access))
+    application.add_handler(CommandHandler("grant_access", handlers.grant_access))
 
-    # Handle callback queries for knowledge base selection and file downloads
+    # Callback Query Handlers
     application.add_handler(
         CallbackQueryHandler(handlers.set_knowledge_base, pattern=r"^set_knowledge:")
     )
     application.add_handler(
         CallbackQueryHandler(handlers.send_file, pattern=r"^get_file:")
     )
-
-    # Handler for file download
     application.add_handler(
-        CallbackQueryHandler(handlers.send_file, pattern=r"^get_file:")
+        CallbackQueryHandler(handlers.set_language, pattern=r"^set_language:")
     )
 
-    # Handlers for access control
-    application.add_handler(CommandHandler("request_access", handlers.request_access))
-    application.add_handler(CommandHandler("grant_access", handlers.grant_access))
-
-    # Add the handle_file handler
+    # Message Handlers
     application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_file))
-
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_message)
     )
 
+    # Error Handler
     application.add_error_handler(error_handler)
 
     application.run_polling()

@@ -81,6 +81,9 @@ def initialize_services(func):
             context.user_data["user_name"] = update.effective_user.full_name
         if "language_code" not in context.user_data:
             context.user_data["language_code"] = update.effective_user.language_code
+        # Initialize user language preference if not set
+        if "language" not in context.user_data:
+            context.user_data["language"] = "English"
         return await func(self, update, context, *args, **kwargs)
 
     return wrapper
@@ -161,6 +164,7 @@ class BotHandlers:
             BotCommand("knowledge_base", "Select a knowledge base"),
             BotCommand("status", "Display current status and information"),
             BotCommand("clear_context", "Clear the current context"),
+            BotCommand("language", "Select your preferred language"),
             BotCommand("request_access", "Request access to the bot"),
             BotCommand("grant_access", "Grant access to a user (Admin only)"),
         ]
@@ -178,11 +182,46 @@ class BotHandlers:
         # Save or update user info
         db_service.save_user_info(user_id, user_name, language_code)
 
-        system_response = text.Greetings.first_time()
+        language = context.user_data.get("language", "English")
+        system_response = text.Greetings.first_time(language=language, user_name=user_name)
         await update.message.reply_text(system_response)
 
         # Store system_response in context.user_data
         context.user_data["system_response"] = system_response
+
+    @authorized_only
+    @initialize_services
+    @log_event(event_type="command")
+    async def language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /language command."""
+        keyboard = [
+            [InlineKeyboardButton("English", callback_data="set_language:English")],
+            [InlineKeyboardButton("Русский", callback_data="set_language:Russian")],
+            [InlineKeyboardButton("Indonesian", callback_data="set_language:Indonesian")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        system_response = "Please select your preferred language:"
+        await update.message.reply_text(system_response, reply_markup=reply_markup)
+        context.user_data["system_response"] = system_response
+
+    @authorized_only
+    @initialize_services
+    async def set_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Set the user's preferred language."""
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+        if data.startswith("set_language:"):
+            selected_language = data[len("set_language:"):]
+            # Update user's language preference
+            context.user_data["language"] = selected_language
+            system_response = text.LanguageResponses.language_set_success(selected_language)
+            await query.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
+        else:
+            system_response = text.Responses.unknown_command(language=context.user_data.get("language", "English"))
+            await query.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
 
     @authorized_only
     @initialize_services

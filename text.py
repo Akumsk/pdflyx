@@ -1,38 +1,112 @@
 # text.py
 
+class Translations:
+    @staticmethod
+    def uploaded_documents(language):
+        translations = {
+            "English": "your uploaded documents",
+            "Russian": "ваши загруженные документы",
+            "Indonesian": "dokumen yang Anda unggah",
+        }
+        return translations.get(language, "your uploaded documents")
+
+class LanguageResponses:
+    @staticmethod
+    def language_set_success(selected_language):
+        messages = {
+            "English": "✅ Language has been set to English.",
+            "Russian": "✅ Язык установлен на Русский.",
+            "Indonesian": "✅ Bahasa telah diatur ke Bahasa Indonesia.",
+        }
+        return messages.get(selected_language, "✅ Language has been updated.")
 
 class Greetings:
 
     @staticmethod
-    def welcome_back(user_name):
-        return (
-            f"Welcome back, {user_name}! 👋\n\n"
-            "I'm here to help you with your construction and design questions. Here's what we can do together:\n\n"
-            "📚 Browse our /knowledge_base of construction regulations\n"
-            "📎 Upload any PDF document and ask me questions about it\n\n"
-            "Quick commands at your service:\n"
-            "🔄 /start - See this welcome message again\n"
-            "⚙️ /status - Check your current settings\n"
-            "🗑️ /clear_context - Start fresh by clearing your document history\n\n"
-            "What would you like to explore today?"
-        )
+    def welcome_back(user_name, language="English"):
+        messages = {
+            "English": (
+                f"Welcome back, {user_name}! 👋\n\n"
+                "I'm here to help you with your construction and design questions. Here's what we can do together:\n\n"
+                "📚 Browse our /knowledge_base of construction regulations\n"
+                "📎 Upload any PDF document and ask me questions about it\n\n"
+                "Quick commands at your service:\n"
+                "🔄 /start - See this welcome message again\n"
+                "⚙️ /status - Check your current settings\n"
+                "🗑️ /clear_context - Start fresh by clearing your document history\n\n"
+                "What would you like to explore today?"
+            ),
+            "Russian": (
+                f"С возвращением, {user_name}! 👋\n\n"
+                "Я здесь, чтобы помочь вам с вопросами по строительству и дизайну. Вот что мы можем сделать вместе:\n\n"
+                "📚 Просмотрите нашу /knowledge_base строительных норм\n"
+                "📎 Загрузите любой PDF-документ и задайте мне вопросы по нему\n\n"
+                "Быстрые команды к вашим услугам:\n"
+                "🔄 /start - Посмотреть это приветственное сообщение снова\n"
+                "⚙️ /status - Проверить текущие настройки\n"
+                "🗑️ /clear_context - Начать заново, очистив историю документов\n\n"
+                "Что бы вы хотели изучить сегодня?"
+            ),
+            "Indonesian": (
+                f"Selamat datang kembali, {user_name}! 👋\n\n"
+                "Saya di sini untuk membantu Anda dengan pertanyaan konstruksi dan desain Anda. Berikut apa yang bisa kita lakukan bersama:\n\n"
+                "📚 Jelajahi /knowledge_base peraturan konstruksi kami\n"
+                "📎 Unggah dokumen PDF apa pun dan ajukan pertanyaan kepada saya tentang itu\n\n"
+                "Perintah cepat untuk Anda:\n"
+                "🔄 /start - Lihat pesan sambutan ini lagi\n"
+                "⚙️ /status - Periksa pengaturan Anda saat ini\n"
+                "🗑️ /clear_context - Mulai baru dengan membersihkan riwayat dokumen Anda\n\n"
+                "Apa yang ingin Anda jelajahi hari ini?"
+            ),
+        }
 
     @staticmethod
-    def first_time():
-        return (
-            "👋 **Hello! I'm your design assistant**\n\n"
-            "I'm here to help architects, designers, and engineers navigate construction regulations "
-            "and technical documentation.\n\n"
-            "Here's how I can assist you:\n\n"
-            "📚 Access construction regulations through our /knowledge_base\n"
-            "📎 Share any PDF document, and I'll help you understand its contents\n"
-            "❓ Ask questions in plain language - I'll handle the technical details\n\n"
-            "Helpful commands to get started:\n"
-            "🔄 /start - See this introduction again\n"
-            "⚙️ /status - View your current settings\n"
-            "🗑️ /clear_context - Reset your document history\n\n"
-            "What would you like to know about?"
-        )
+    def first_time(language="English", user_name=""):
+        messages = {
+            "English": (
+                "👋 **Hello! I'm your design assistant**\n\n"
+                "I'm here to help architects, designers, and engineers navigate construction regulations "
+                "and technical documentation.\n\n"
+                "Here's how I can assist you:\n\n"
+                "📚 Access construction regulations through our /knowledge_base\n"
+                "📎 Share any PDF document, and I'll help you understand its contents\n"
+                "❓ Ask questions in plain language - I'll handle the technical details\n\n"
+                "Helpful commands to get started:\n"
+                "🔄 /start - See this introduction again\n"
+                "⚙️ /status - View your current settings\n"
+                "🗑️ /clear_context - Reset your document history\n\n"
+                "What would you like to know about?"
+            ),
+            "Russian": (
+                "👋 **Здравствуйте! Я ваш помощник по дизайну**\n\n"
+                "Я здесь, чтобы помочь архитекторам, дизайнерам и инженерам разобраться в строительных нормах "
+                "и технической документации.\n\n"
+                "Вот как я могу вам помочь:\n\n"
+                "📚 Доступ к строительным нормам через нашу /knowledge_base\n"
+                "📎 Поделитесь любым PDF-документом, и я помогу вам понять его содержание\n"
+                "❓ Задавайте вопросы простым языком - я разберусь с техническими деталями\n\n"
+                "Полезные команды для начала:\n"
+                "🔄 /start - Посмотреть это введение снова\n"
+                "⚙️ /status - Просмотреть текущие настройки\n"
+                "🗑️ /clear_context - Сбросить историю документов\n\n"
+                "О чем бы вы хотели узнать?"
+            ),
+            "Indonesian": (
+                "👋 **Halo! Saya asisten desain Anda**\n\n"
+                "Saya di sini untuk membantu arsitek, desainer, dan insinyur menavigasi peraturan konstruksi "
+                "dan dokumentasi teknis.\n\n"
+                "Berikut cara saya dapat membantu Anda:\n\n"
+                "📚 Akses peraturan konstruksi melalui /knowledge_base kami\n"
+                "📎 Bagikan dokumen PDF apa pun, dan saya akan membantu Anda memahami isinya\n"
+                "❓ Ajukan pertanyaan dalam bahasa sederhana - saya akan menangani detail teknisnya\n\n"
+                "Perintah yang berguna untuk memulai:\n"
+                "🔄 /start - Lihat pengantar ini lagi\n"
+                "⚙️ /status - Lihat pengaturan Anda saat ini\n"
+                "🗑️ /clear_context - Atur ulang riwayat dokumen Anda\n\n"
+                "Apa yang ingin Anda ketahui?"
+            ),
+        }
+        return messages.get(language, messages["English"])
 
 
 class Status:

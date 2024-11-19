@@ -26,7 +26,7 @@ from pymupdf.mupdf import ll_pdf_lookup_substitute_font_outparams
 
 from db_service import DatabaseService
 from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER
-from helpers import current_timestamp
+from helpers import current_timestamp, parser_html
 
 
 class LLMService:
@@ -113,7 +113,6 @@ class LLMService:
             "Do not include references to the source documents in your answer. "
             f"If you need to use the current date, today is {current_timestamp()}. "
             "If the prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
-            "Generate the response using HTML tags to denote headers, lists, and other relevant structures. Use \n for line breaks instead of <br> tags."
             "\n\n{context}"
         )
 
@@ -176,9 +175,9 @@ class LLMService:
                 pages_str = ", ".join(str(page) for page in pages_list)
                 answer_with_references += f"{doc_name}, pages: {pages_str}\n"
 
-            return answer_with_references, source_files
+            return parser_html(answer_with_references), source_files
         else:
-            return answer, None
+            return parser_html(answer), None
 
     def is_prompt_relevant_to_documents(self, prompt, sources):
         """

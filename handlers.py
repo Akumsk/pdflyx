@@ -184,7 +184,7 @@ class BotHandlers:
 
         language = context.user_data.get("language", "English")
         system_response = text.Greetings.first_time(language=language, user_name=user_name)
-        await update.message.reply_text(system_response)
+        await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
         # Store system_response in context.user_data
         context.user_data["system_response"] = system_response
@@ -201,7 +201,7 @@ class BotHandlers:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         system_response = "Please select your preferred language:"
-        await update.message.reply_text(system_response, reply_markup=reply_markup)
+        await update.message.reply_text(system_response, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         context.user_data["system_response"] = system_response
 
     @authorized_only
@@ -233,6 +233,7 @@ class BotHandlers:
         folder_path = context.user_data.get("folder_path", "")
         valid_files_in_folder = context.user_data.get("valid_files_in_folder", [])
         context_source = context.user_data.get("context_source", "none")
+        language = context.user_data.get("language", "English")
 
         # Find the knowledge base name from the folder_path
         knowledge_base_name = None
@@ -252,6 +253,7 @@ class BotHandlers:
                         knowledge_base_name,
                         file_list,
                         empty_list if empty_list else None,
+                        language=language,
                     )
                 elif context_source == "upload":
                     system_response = text.Status.knowledge_base_set(
@@ -259,20 +261,22 @@ class BotHandlers:
                         "your uploaded documents",
                         file_list,
                         empty_list if empty_list else None,
+                        language=language,
                     )
             else:
                 if context_source == "folder" and knowledge_base_name:
                     system_response = text.Status.knowledge_base_no_files(
-                        user_name, knowledge_base_name
+                        user_name, knowledge_base_name,
+                        language=language,
                     )
                 elif context_source == "upload":
                     system_response = text.Status.knowledge_base_no_files(
-                        user_name, "your uploaded documents"
+                        user_name, "your uploaded documents", language=language
                     )
                 else:
-                    system_response = text.Status.no_knowledge_base_selected(user_name)
+                    system_response = text.Status.no_knowledge_base_selected(user_name, language=language)
         else:
-            system_response = text.Status.no_knowledge_base_selected(user_name)
+            system_response = text.Status.no_knowledge_base_selected(user_name, language=language)
 
         await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
@@ -282,14 +286,15 @@ class BotHandlers:
     async def knowledge_base(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /knowledge_base command."""
         # Create a keyboard from the keys of the knowledge_base_paths dictionary
+        language = context.user_data.get("language", "English")
         keyboard = [
             [InlineKeyboardButton(kb_name, callback_data=f"set_knowledge:{kb_name}")]
             for kb_name in knowledge_base_paths.keys()
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        system_response = text.KnowledgeBaseResponses.select_knowledge_base()
+        system_response = text.KnowledgeBaseResponses.select_knowledge_base(language=language)
         await update.message.reply_text(
-            system_response, reply_markup=reply_markup
+            system_response, reply_markup=reply_markup, parse_mode=ParseMode.HTML
         )
 
     @authorized_only
@@ -299,6 +304,7 @@ class BotHandlers:
     ):
         """Set the folder path based on the user's knowledge base selection."""
         query = update.callback_query
+        language = context.user_data.get("language", "English")
         await query.answer()
         data = query.data
         if data.startswith("set_knowledge:"):
@@ -326,20 +332,20 @@ class BotHandlers:
             context.user_data["valid_files_in_folder"] = valid_files_in_folder
             if not valid_files_in_folder:
                 await query.message.reply_text(
-                    KnowledgeBaseResponses.no_valid_files_in_knowledge_base()
+                    KnowledgeBaseResponses.no_valid_files_in_knowledge_base(language=language), parse_mode=ParseMode.HTML
                 )
                 return
             index_status = llm_service.load_and_index_documents(folder_path)
             if index_status != "Documents successfully indexed.":
                 logging.error(f"Error during load_and_index_documents: {index_status}")
-                await query.message.reply_text(KnowledgeBaseResponses.indexing_error())
+                await query.message.reply_text(KnowledgeBaseResponses.indexing_error(language=language), parse_mode=ParseMode.HTML)
                 return
             context.user_data["vector_store_loaded"] = True
             await query.message.reply_text(
-                KnowledgeBaseResponses.knowledge_base_set_success(selection)
+                KnowledgeBaseResponses.knowledge_base_set_success(selection, language=language), parse_mode=ParseMode.HTML
             )
         else:
-            await query.message.reply_text(KnowledgeBaseResponses.unknown_command())
+            await query.message.reply_text(KnowledgeBaseResponses.unknown_command(language=language), parse_mode=ParseMode.HTML)
 
     @authorized_only
     @initialize_services
@@ -348,15 +354,15 @@ class BotHandlers:
         """Set the folder path after receiving it from the user."""
         db_service = context.user_data["db_service"]
         llm_service = context.user_data["llm_service"]
-
+        language = context.user_data.get("language", "English")
         folder_path = update.message.text.strip()
         user_id = context.user_data["user_id"]
         user_name = update.effective_user.full_name
 
         # Check if the folder path exists
         if not os.path.isdir(folder_path):
-            system_response = text.Responses.invalid_folder_path()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.invalid_folder_path(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
             # Save event log
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
@@ -368,8 +374,8 @@ class BotHandlers:
             if f.lower().endswith((".pdf", ".docx", ".xlsx"))
         ]
         if not valid_files_in_folder:
-            system_response = text.Responses.no_valid_files()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.no_valid_files(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
             # Save event log
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
@@ -383,8 +389,8 @@ class BotHandlers:
         # Check if indexing was successful
         if index_status != "Documents successfully indexed.":
             logging.error(f"Error during load_and_index_documents: {index_status}")
-            system_response = text.Responses.indexing_error()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.indexing_error(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
             # Save event log
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
@@ -395,9 +401,9 @@ class BotHandlers:
         empty_list = llm_service.get_empty_docs(folder_path)
 
         system_response = text.Responses.folder_is_set(
-            folder_path, empty_list if empty_list else None
+            folder_path, empty_list if empty_list else None, language=language
         )
-        await update.message.reply_text(system_response)
+        await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
         # Save folder path in database
         db_service.save_folder(user_id=user_id, user_name=user_name, folder=folder_path)
@@ -412,6 +418,7 @@ class BotHandlers:
     @log_event(event_type="command")
     async def clear_context(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /clear_context command."""
+        language = context.user_data.get("language", "English")
         # Clear context data
         keys_to_clear = [
             "folder_path",
@@ -445,8 +452,8 @@ class BotHandlers:
         db_service = context.user_data["db_service"]
         db_service.clear_user_folder(user_id)
 
-        system_response = text.Responses.context_cleared()
-        await update.message.reply_text(system_response)
+        system_response = text.Responses.context_cleared(language=language)
+        await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
         # Save event log
         context.user_data["system_response"] = system_response
@@ -462,7 +469,7 @@ class BotHandlers:
         llm_service = context.user_data["llm_service"]
         user_message = update.message.text
         user_id = context.user_data["user_id"]
-
+        language = context.user_data.get("language", "English")
         # Generate conversation_id and store it in context.user_data
         conversation_id = str(uuid.uuid4())
         context.user_data["conversation_id"] = conversation_id
@@ -480,8 +487,8 @@ class BotHandlers:
             )
         except Exception as e:
             logging.error(f"Error during generate_response: {e}")
-            system_response = text.Responses.processing_error()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.processing_error(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
             # Save event log
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
@@ -505,9 +512,9 @@ class BotHandlers:
             context.user_data["file_id_map"] = file_id_map
 
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(bot_message, reply_markup=reply_markup)
+            await update.message.reply_text(bot_message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         else:
-            await update.message.reply_text(response)
+            await update.message.reply_text(response, parse_mode=ParseMode.HTML)
 
         # Save the bot's message
         db_service.save_message(conversation_id, "bot", None, bot_message)
@@ -525,7 +532,7 @@ class BotHandlers:
             user_folder = f"user_documents/{user_id}"
             db_service = context.user_data["db_service"]
             llm_service = context.user_data["llm_service"]
-
+            language = context.user_data.get("language", "English")
             # Create the user directory if it doesn't exist
             if not os.path.exists(user_folder):
                 os.makedirs(user_folder)
@@ -538,8 +545,8 @@ class BotHandlers:
             documents = [message.document] if message.document else message.documents
 
             if not documents:
-                system_response = text.Responses.no_files_received()
-                await update.message.reply_text(system_response)
+                system_response = text.Responses.no_files_received(language=language)
+                await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
                 return
 
             valid_files = []
@@ -583,8 +590,8 @@ class BotHandlers:
                     logging.error(
                         f"Error during load_and_index_documents: {index_status}"
                     )
-                    system_response = text.Responses.indexing_error()
-                    await update.message.reply_text(system_response)
+                    system_response = text.Responses.indexing_error(language=language)
+                    await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
                     return
                 context.user_data["vector_store_loaded"] = True
 
@@ -596,16 +603,16 @@ class BotHandlers:
 
                 # Generate appropriate messages
                 if not invalid_files:
-                    system_response = text.Responses.upload_success()
+                    system_response = text.Responses.upload_success(language=language)
                 else:
-                    system_response = text.Responses.upload_partial_success()
-                await update.message.reply_text(system_response)
+                    system_response = text.Responses.upload_partial_success(language=language)
+                await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
             else:
                 if invalid_files and not valid_files:
-                    system_response = text.Responses.unsupported_files()
+                    system_response = text.Responses.unsupported_files(language=language)
                 else:
-                    system_response = text.Responses.processing_error()
-                await update.message.reply_text(system_response)
+                    system_response = text.Responses.processing_error(language=language)
+                await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
             # Save event log
             context.user_data["system_response"] = system_response
@@ -613,8 +620,8 @@ class BotHandlers:
         except Exception as e:
             # Log the error
             logging.error(f"Error handling file: {e}")
-            system_response = text.Responses.generic_error()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.generic_error(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
     @authorized_only
     @initialize_services
@@ -622,6 +629,7 @@ class BotHandlers:
         """Handle sending the requested file back to the user based on short ID."""
 
         query = update.callback_query
+        language = context.user_data.get("language", "English")
         await query.answer()
         data = query.data
         if data.startswith("get_file:"):
@@ -650,7 +658,7 @@ class BotHandlers:
             else:
                 await query.message.reply_text(text.FileResponses.folder_not_set())
         else:
-            system_response = text.Responses.unknown_command()
+            system_response = text.Responses.unknown_command(language=language)
             await query.message.reply_text(system_response)
 
     @log_event(event_type="command")
@@ -660,6 +668,7 @@ class BotHandlers:
         user_name = user.full_name
         username = user.username
         language_code = user.language_code
+        language = context.user_data.get("language", "English")
 
         # Initialize db_service in context if not already present
         if "db_service" not in context.user_data:
@@ -672,27 +681,28 @@ class BotHandlers:
         # Send a notification to the admin
         admin_id = os.getenv("ADMIN_TELEGRAM_ID")
         message = f"Access request from {user_name} (@{username}), ID: {user_id}"
-        await context.bot.send_message(chat_id=admin_id, text=message)
+        await context.bot.send_message(chat_id=admin_id, text=message, parse_mode=ParseMode.HTML)
 
         # Inform the user
-        system_response = text.Responses.access_requested()
-        await update.message.reply_text(system_response)
+        system_response = text.Responses.access_requested(language=language)
+        await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
         context.user_data["system_response"] = system_response
 
     @authorized_only
     @initialize_services
     async def grant_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        language = context.user_data.get("language", "English")
         admin_id = update.effective_user.id
         if str(admin_id) != os.getenv("ADMIN_TELEGRAM_ID"):
-            await update.message.reply_text(text.Responses.unauthorized_action())
+            await update.message.reply_text(text.Responses.unauthorized_action(language=language), parse_mode=ParseMode.HTML)
             return
 
         try:
             user_id_to_grant = int(context.args[0])
             db_service = context.user_data["db_service"]
             db_service.grant_access(user_id_to_grant)
-            system_response = text.Responses.grant_access_success(user_id_to_grant)
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.grant_access_success(user_id_to_grant, language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
         except (IndexError, ValueError):
-            system_response = text.Responses.grant_access_usage()
-            await update.message.reply_text(system_response)
+            system_response = text.Responses.grant_access_usage(language=language)
+            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)

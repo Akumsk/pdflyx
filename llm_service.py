@@ -113,6 +113,7 @@ class LLMService:
             "Do not include references to the source documents in your answer. "
             f"If you need to use the current date, today is {current_timestamp()}. "
             "If the prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
+            "Generate the response using HTML tags to denote headers, lists, and other relevant structures. Use \n for line breaks instead of <br> tags."
             "\n\n{context}"
         )
 

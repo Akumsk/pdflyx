@@ -83,3 +83,15 @@ def convert_bold_italic(text):
     # Convert italic (*text*)
     text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
     return text
+
+def get_language_code(language_name):
+    """
+    Maps language names to their respective language codes.
+    """
+    mapping = {
+        "English": "en",
+        "Russian": "ru",
+        "Indonesian": "id",
+        # Add more mappings as needed
+    }
+    return mapping.get(language_name, "en")

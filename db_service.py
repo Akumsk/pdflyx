@@ -404,28 +404,96 @@ class DatabaseService:
             connection.close()
 
     def save_user_info(self, user_id, user_name, language_code):
+        """
+        Saves or updates user information in the users table.
+        On first insertion, sets current_language to language_code.
+        """
         now = datetime.utcnow()
         try:
             connection = self.connect()
             cursor = connection.cursor()
             cursor.execute(
                 """
-                INSERT INTO users (user_id, user_name, language_code, date_joined, last_active, is_active, access, role)
-                VALUES (%s, %s, %s, %s, %s, True, False, 'user')
+                INSERT INTO users (
+                    user_id, 
+                    user_name, 
+                    language_code, 
+                    current_language, 
+                    date_joined, 
+                    last_active, 
+                    is_active, 
+                    access, 
+                    role
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, TRUE, FALSE, 'user')
                 ON CONFLICT (user_id) DO UPDATE
-                SET user_name = EXCLUDED.user_name,
+                SET 
+                    user_name = EXCLUDED.user_name,
                     language_code = EXCLUDED.language_code,
                     last_active = EXCLUDED.last_active
                 """,
-                (user_id, user_name, language_code, now, now),
+                (
+                    user_id,
+                    user_name,
+                    language_code,
+                    language_code,  # Initialize current_language with language_code
+                    now,
+                    now
+                ),
             )
+            connection.commit()
             print("User info saved/updated successfully.")
         except Exception as e:
             print(f"Error saving user info: {e}")
-            self.conn.rollback()
+            connection.rollback()
         finally:
             cursor.close()
             connection.close()
+
+    def get_user_info(self, user_id):
+        """
+        Retrieves user information from the users table.
+
+        Args:
+            user_id (str): The unique identifier of the user.
+
+        Returns:
+            dict or None: A dictionary containing user information or None if user does not exist.
+        """
+        connection = None
+        cursor = None
+        try:
+            connection = self.connect()
+            cursor = connection.cursor()
+            query = """
+                SELECT user_id, user_name, language_code, current_language, date_joined, last_active, is_active, access, role
+                FROM users
+                WHERE user_id = %s
+            """
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+            if result:
+                return {
+                    "user_id": result[0],
+                    "user_name": result[1],
+                    "language_code": result[2],
+                    "current_language": result[3],
+                    "date_joined": result[4],
+                    "last_active": result[5],
+                    "is_active": result[6],
+                    "access": result[7],
+                    "role": result[8],
+                }
+            else:
+                return None
+        except Exception as e:
+            print(f"Error retrieving user info for user {user_id}: {e}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
 
     def update_last_active(self, user_id):
         now = datetime.utcnow()
@@ -442,6 +510,71 @@ class DatabaseService:
         finally:
             cursor.close()
             connection.close()
+
+    def update_current_language(self, user_id, current_language):
+        """
+        Updates the current_language for a given user in the users table.
+
+        Args:
+            user_id (str): The unique identifier of the user.
+            current_language (str): The language code to set as the current language.
+        """
+        connection = None
+        cursor = None
+        try:
+            connection = self.connect()
+            cursor = connection.cursor()
+            query = """
+                UPDATE users
+                SET current_language = %s
+                WHERE user_id = %s
+            """
+            cursor.execute(query, (current_language, user_id))
+            connection.commit()
+            print(f"Updated current_language for user {user_id} to {current_language}.")
+        except Exception as e:
+            print(f"Error updating current_language for user {user_id}: {e}")
+            if connection:
+                connection.rollback()
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+
+    def get_current_language(self, user_id):
+        """
+        Retrieves the current_language for a given user from the users table.
+
+        Args:
+            user_id (str): The unique identifier of the user.
+
+        Returns:
+            str or None: The current language of the user or None if not set.
+        """
+        connection = None
+        cursor = None
+        try:
+            connection = self.connect()
+            cursor = connection.cursor()
+            query = """
+                SELECT current_language FROM users
+                WHERE user_id = %s
+            """
+            cursor.execute(query, (user_id,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                return None
+        except Exception as e:
+            print(f"Error retrieving current_language for user {user_id}: {e}")
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
 
     def grant_access(self, user_id):
         try:

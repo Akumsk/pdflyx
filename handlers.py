@@ -3,6 +3,9 @@
 import logging
 import os
 import uuid
+import asyncio
+
+import aiofiles
 from telegram import (
     Update,
     BotCommand,
@@ -21,12 +24,12 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
-from settings import CHAT_HISTORY_LEVEL, knowledge_base_paths
+from settings import CHAT_HISTORY_LEVEL, knowledge_base_paths, SUPPORTED_LANGUAGES
 from db_service import DatabaseService
 from llm_service import LLMService
-from helpers import messages_to_langchain_messages
+from helpers import messages_to_langchain_messages, get_language_code
 import text
-from text import KnowledgeBaseResponses
+from text import KnowledgeBaseResponses, CommandDescriptions
 
 
 # Decorators:
@@ -81,9 +84,21 @@ def initialize_services(func):
             context.user_data["user_name"] = update.effective_user.full_name
         if "language_code" not in context.user_data:
             context.user_data["language_code"] = update.effective_user.language_code
-        # Initialize user language preference if not set
-        if "language" not in context.user_data:
-            context.user_data["language"] = "English"
+
+        # Access db_service
+        db_service = context.user_data["db_service"]
+        user_id = context.user_data["user_id"]
+
+        # Fetch current_language from the database
+        current_language = db_service.get_current_language(user_id)
+        if current_language:
+            context.user_data["language"] = current_language
+        else:
+            # If current_language is not set, initialize it with language_code
+            language_code = context.user_data["language_code"]
+            context.user_data["language"] = language_code
+            db_service.update_current_language(user_id, language_code)
+
         return await func(self, update, context, *args, **kwargs)
 
     return wrapper
@@ -114,22 +129,42 @@ def log_event(event_type):
         ):
             # Before executing the handler function
             user_id = update.effective_user.id
-            user_message = update.message.text if update.message else ""
-            conversation_id = str(uuid.uuid4())
 
-            # Execute the handler function
-            result = await func(self, update, context, *args, **kwargs)
+            # Extract user_message based on the type of update
+            if update.message:
+                user_message = update.message.text
+            elif update.callback_query:
+                user_message = update.callback_query.data
+            else:
+                user_message = ""
 
-            # After executing the handler function
-            # Retrieve system_response and conversation_id from context.user_data
-            system_response = context.user_data.get("system_response", "")
             conversation_id = context.user_data.get("conversation_id")
-
             if not conversation_id:
-                # Handle the case where conversation_id is missing
-                logging.error("conversation_id not found in context.user_data")
                 conversation_id = str(uuid.uuid4())
                 context.user_data["conversation_id"] = conversation_id
+
+            # Initialize system_response
+            system_response = context.user_data.get("system_response", "")
+
+            try:
+                # Execute the handler function
+                result = await func(self, update, context, *args, **kwargs)
+                # After executing the handler function, retrieve system_response
+                system_response = context.user_data.get("system_response", system_response)
+            except Exception as e:
+                # Log the exception
+                logging.error(f"Exception in handler function {func.__name__}: {e}")
+                # Set system_response to a generic error message
+                language = context.user_data.get("language", "English")
+                system_response = text.Responses.generic_error(language=language)
+                # Send error message to the user
+                if update.message:
+                    await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
+                elif update.callback_query:
+                    await update.callback_query.message.reply_text(system_response, parse_mode=ParseMode.HTML)
+                # Set system_response in context.user_data
+                context.user_data["system_response"] = system_response
+                result = None  # Or re-raise the exception if desired
 
             # Access db_service
             db_service = context.user_data.get("db_service")
@@ -159,16 +194,20 @@ class BotHandlers:
         pass
 
     async def post_init(self, application):
-        commands = [
-            BotCommand("start", "Display introduction message"),
-            BotCommand("knowledge_base", "Select a knowledge base"),
-            BotCommand("status", "Display current status and information"),
-            BotCommand("clear_context", "Clear the current context"),
-            BotCommand("language", "Select your preferred language"),
-            BotCommand("request_access", "Request access to the bot"),
-            BotCommand("grant_access", "Grant access to a user (Admin only)"),
-        ]
-        await application.bot.set_my_commands(commands)
+        """
+        Initializes bot commands with multilingual support.
+        """
+        for language in SUPPORTED_LANGUAGES:
+            commands = CommandDescriptions.get_commands(language=language)
+            language_code = get_language_code(language)
+            try:
+                await application.bot.set_my_commands(
+                    commands,
+                    language_code=language_code
+                )
+                logging.info(f"Commands set for language: {language} ({language_code})")
+            except Exception as e:
+                logging.error(f"Failed to set commands for {language} ({language_code}): {e}")
 
     @initialize_services
     @log_event(event_type="command")
@@ -200,12 +239,17 @@ class BotHandlers:
             [InlineKeyboardButton("Indonesian", callback_data="set_language:Indonesian")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        system_response = "Please select your preferred language:"
+
+        # Use language from context.user_data
+        current_language = context.user_data.get("language", "English")
+        system_response = text.LanguageResponses.select_language_prompt(current_language)
+
         await update.message.reply_text(system_response, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         context.user_data["system_response"] = system_response
 
     @authorized_only
     @initialize_services
+    @log_event(event_type="inline_button")
     async def set_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Set the user's preferred language."""
         query = update.callback_query
@@ -213,8 +257,18 @@ class BotHandlers:
         data = query.data
         if data.startswith("set_language:"):
             selected_language = data[len("set_language:"):]
-            # Update user's language preference
             context.user_data["language"] = selected_language
+            user_id = update.effective_user.id
+
+            # Access the db_service from context.user_data
+            db_service = context.user_data.get("db_service")
+            if db_service:
+                # Update the current_language in the database
+                db_service.update_current_language(user_id, selected_language)
+            else:
+                logging.error("db_service not found in context.user_data")
+
+            # Use language-specific response
             system_response = text.LanguageResponses.language_set_success(selected_language)
             await query.message.reply_text(system_response)
             context.user_data["system_response"] = system_response
@@ -299,6 +353,7 @@ class BotHandlers:
 
     @authorized_only
     @initialize_services
+    @log_event(event_type="inline_button")
     async def set_knowledge_base(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
@@ -308,12 +363,12 @@ class BotHandlers:
         await query.answer()
         data = query.data
         if data.startswith("set_knowledge:"):
-            selection = data[len("set_knowledge:") :]
+            selection = data[len("set_knowledge:"):]
             folder_path = knowledge_base_paths.get(selection, None)
             if folder_path is None:
-                await query.message.reply_text(
-                    KnowledgeBaseResponses.unknown_knowledge_base()
-                )
+                system_response = KnowledgeBaseResponses.unknown_knowledge_base()
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
                 return
 
             # Set the folder path and process the documents
@@ -341,11 +396,13 @@ class BotHandlers:
                 await query.message.reply_text(KnowledgeBaseResponses.indexing_error(language=language), parse_mode=ParseMode.HTML)
                 return
             context.user_data["vector_store_loaded"] = True
-            await query.message.reply_text(
-                KnowledgeBaseResponses.knowledge_base_set_success(selection, language=language), parse_mode=ParseMode.HTML
-            )
+            system_response = KnowledgeBaseResponses.knowledge_base_set_success(selection, language=language)
+            await query.message.reply_text(system_response, parse_mode=ParseMode.HTML)
+            context.user_data["system_response"] = system_response
         else:
-            await query.message.reply_text(KnowledgeBaseResponses.unknown_command(language=language), parse_mode=ParseMode.HTML)
+            system_response = KnowledgeBaseResponses.unknown_command(language=language)
+            await query.message.reply_text(system_response, parse_mode=ParseMode.HTML)
+            context.user_data["system_response"] = system_response
 
     @authorized_only
     @initialize_services
@@ -625,41 +682,65 @@ class BotHandlers:
 
     @authorized_only
     @initialize_services
+    @log_event(event_type="inline_button")
     async def send_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle sending the requested file back to the user based on short ID."""
-
         query = update.callback_query
         language = context.user_data.get("language", "English")
+
+        # Immediately answer the callback to prevent timeout
         await query.answer()
         data = query.data
+
         if data.startswith("get_file:"):
-            file_id = data[len("get_file:") :]
+            file_id = data[len("get_file:"):]
             file_id_map = context.user_data.get("file_id_map", {})
             file_name = file_id_map.get(file_id)
+
             if not file_name:
-                await query.message.reply_text(text.FileResponses.file_not_found())
+                system_response = text.FileResponses.file_not_found()
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
                 return
+
             folder_path = context.user_data.get("folder_path")
-            if folder_path:
-                file_path = os.path.join(folder_path, file_name)
-                if os.path.isfile(file_path):
-                    try:
-                        with open(file_path, "rb") as f:
-                            await query.message.reply_document(
-                                document=f, filename=file_name
-                            )
-                    except Exception as e:
-                        logging.error(f"Error sending file: {e}")
-                        await query.message.reply_text(
-                            text.FileResponses.send_file_error()
-                        )
-                else:
-                    await query.message.reply_text(text.FileResponses.file_not_found())
-            else:
-                await query.message.reply_text(text.FileResponses.folder_not_set())
+            if not folder_path:
+                system_response = text.FileResponses.folder_not_set()
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
+                return
+
+            file_path = os.path.join(folder_path, file_name)
+            if not os.path.isfile(file_path):
+                system_response = text.FileResponses.file_not_found()
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
+                return
+
+            # Offload the file sending to a background task
+            asyncio.create_task(
+                self.send_document_async(query, file_path, file_name, language, context)
+            )
         else:
             system_response = text.Responses.unknown_command(language=language)
             await query.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
+
+    async def send_document_async(self, query, file_path, file_name, language, context):
+        try:
+            async with aiofiles.open(file_path, "rb") as f:
+                file_data = await f.read()
+
+            await query.message.reply_document(
+                document=file_data,
+                filename=file_name
+            )
+            context.user_data["system_response"] = None  # File sent successfully
+            logging.info(f"File '{file_name}' sent successfully to user {query.from_user.id}.")
+        except Exception as e:
+            logging.error(f"Error sending file '{file_name}' to user {query.from_user.id}: {e}")
+            system_response = text.FileResponses.send_file_error()
+            await query.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
 
     @log_event(event_type="command")
     async def request_access(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

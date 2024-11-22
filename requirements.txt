@@ -10,3 +10,4 @@ psycopg2
 tiktoken
 pytest
 pytest-asyncio
+aiofiles

@@ -157,10 +157,6 @@ class LLMService:
                 references[filename] = set()
             references[filename].add(page)
 
-        # Only append references if the prompt is likely related to documents
-        # For a more robust solution, implement similarity checks here
-        # For example, calculate cosine similarity between prompt and retrieved docs
-
         # Placeholder for similarity check
         # Implement your similarity logic here and set 'is_relevant' accordingly
         is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)

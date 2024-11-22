@@ -1,5 +1,63 @@
 # text.py
 
+from telegram import BotCommand
+import logging
+
+class CommandDescriptions:
+    """
+    Contains translations for command descriptions.
+    """
+
+    @staticmethod
+    def get_commands(language="English"):
+        """
+        Returns a list of BotCommand instances with descriptions in the specified language.
+        """
+        descriptions = {
+            "English": {
+                "start": "Display introduction message",
+                "knowledge_base": "Select a knowledge base",
+                "status": "Display current status and information",
+                "clear_context": "Clear the current context",
+                "language": "Select your preferred language",
+                "request_access": "Request access to the bot",
+                "grant_access": "Grant access to a user (Admin only)",
+            },
+            "Russian": {
+                "start": "Показать вводное сообщение",
+                "knowledge_base": "Выбрать базу знаний",
+                "status": "Показать текущий статус и информацию",
+                "clear_context": "Очистить текущий контекст",
+                "language": "Выбрать предпочитаемый язык",
+                "request_access": "Запросить доступ к боту",
+                "grant_access": "Предоставить доступ пользователю (Только админ)",
+            },
+            "Indonesian": {
+                "start": "Tampilkan pesan pengantar",
+                "knowledge_base": "Pilih basis pengetahuan",
+                "status": "Tampilkan status dan informasi saat ini",
+                "clear_context": "Hapus konteks saat ini",
+                "language": "Pilih bahasa yang Anda inginkan",
+                "request_access": "Minta akses ke bot",
+                "grant_access": "Berikan akses ke pengguna (Hanya Admin)",
+            },
+            # Add more languages as needed
+        }
+
+        lang_commands = descriptions.get(language, descriptions["English"])
+
+        commands = [
+            BotCommand("start", lang_commands["start"]),
+            BotCommand("knowledge_base", lang_commands["knowledge_base"]),
+            BotCommand("status", lang_commands["status"]),
+            BotCommand("clear_context", lang_commands["clear_context"]),
+            BotCommand("language", lang_commands["language"]),
+            BotCommand("request_access", lang_commands["request_access"]),
+            BotCommand("grant_access", lang_commands["grant_access"]),
+        ]
+
+        return commands
+
 class Translations:
     @staticmethod
     def uploaded_documents(language):
@@ -20,87 +78,54 @@ class LanguageResponses:
         }
         return messages.get(selected_language, "✅ Language has been updated.")
 
-class Greetings:
-
     @staticmethod
-    def welcome_back(user_name, language="English"):
-        messages = {
-            "English": (
-                f"\U0001F44B <b>Welcome back, {user_name}!</b> F44B\n\n"
-                "I'm here to help you with your construction and design questions. Here's what we can do together:\n\n"
-                "\U0001F4DA Browse our <b>/knowledge_base</b> of construction regulations\n"
-                "\U0001F4CE Upload any PDF document and ask me questions about it\n\n"
-                "Quick commands at your service:\n"
-                "\U0001F504 /start - See this welcome message again\n"
-                "⚙️ /status - Check your current settings\n"
-                "🗑️ /clear_context - Start fresh by clearing your document history\n\n"
-                "What would you like to explore today?"
-            ),
-            "Russian": (
-                f"\U0001F44B <b>С возвращением, {user_name}!</b> F44B\n\n"
-                "Я здесь, чтобы помочь вам с вопросами по строительству и дизайну. Вот что мы можем сделать вместе:\n\n"
-                "\U0001F4DA Просмотрите нашу <b>/knowledge_base</b> строительных норм\n"
-                "\U0001F4CE Загрузите любой PDF-документ и задайте мне вопросы по нему\n\n"
-                "Быстрые команды к вашим услугам:\n"
-                "\U0001F504 /start - Посмотреть это приветственное сообщение снова\n"
-                "⚙️ /status - Проверить текущие настройки\n"
-                "🗑️ /clear_context - Начать заново, очистив историю документов\n\n"
-                "Что бы вы хотели изучить сегодня?"
-            ),
-            "Indonesian": (
-                f"\U0001F44B <b>Selamat datang kembali, {user_name}!</b> F44B\n\n"
-                "Saya di sini untuk membantu Anda dengan pertanyaan konstruksi dan desain Anda. Berikut apa yang bisa kita lakukan bersama:\n\n"
-                "\U0001F4DA Jelajahi <b>/knowledge_base</b> peraturan konstruksi kami\n"
-                "\U0001F4CE Unggah dokumen PDF apa pun dan ajukan pertanyaan kepada saya tentang itu\n\n"
-                "Perintah cepat untuk Anda:\n"
-                "\U0001F504 /start - Lihat pesan sambutan ini lagi\n"
-                "⚙️ /status - Periksa pengaturan Anda saat ini\n"
-                "🗑️ /clear_context - Mulai baru dengan membersihkan riwayat dokumen Anda\n\n"
-                "Apa yang ingin Anda jelajahi hari ini?"
-            ),
+    def select_language_prompt(language):
+        prompts = {
+            "English": "Please select your preferred language:",
+            "Russian": "Пожалуйста, выберите предпочитаемый язык:",
+            "Indonesian": "Silakan pilih bahasa yang Anda inginkan:",
         }
-        return messages.get(language, messages["English"])
+        return prompts.get(language, "Please select your preferred language:")
+
+class Greetings:
 
     @staticmethod
     def first_time(language="English", user_name=""):
         messages = {
             "English": (
                 "\U0001F44B <b>Hello! I'm your design assistant</b>\n\n"
-                "I'm here to help architects, designers, and engineers navigate construction regulations "
-                "and technical documentation.\n\n"
+                "🏗️ Get instant construction recommendations and expert answers to your building questions through this smart Telegram bot 🤖\n\n"
                 "Here's how I can assist you:\n\n"
                 "\U0001F4DA Access construction regulations through our /knowledge_base\n"
-                "\U0001F4CE Share any PDF document, and I'll help you understand its contents\n"
                 "❓ Ask questions in plain language - I'll handle the technical details\n\n"
                 "Helpful commands to get started:\n"
                 "\U0001F504 /start - See this introduction again\n"
+                "🌐 /language - Select your preferred language\n"
                 "⚙️ /status - View your current settings\n"
                 "🗑️ /clear_context - Reset your document history\n\n"
                 "What would you like to know about?"
             ),
             "Russian": (
                 "\U0001F44B <b>Здравствуйте! Я ваш помощник по дизайну</b>\n\n"
-                "Я здесь, чтобы помочь архитекторам, дизайнерам и инженерам разобраться в строительных нормах "
-                "и технической документации.\n\n"
+                "🏗️ Получите мгновенные рекомендации по строительству и экспертные ответы на ваши вопросы через этого умного Telegram бота 🤖\n\n"
                 "Вот как я могу вам помочь:\n\n"
                 "\U0001F4DA Доступ к строительным нормам через нашу /knowledge_base\n"
-                "\U0001F4CE Поделитесь любым PDF-документом, и я помогу вам понять его содержание\n"
                 "❓ Задавайте вопросы простым языком - я разберусь с техническими деталями\n\n"
                 "Полезные команды для начала:\n"
                 "\U0001F504 /start - Посмотреть это введение снова\n"
+                "🌐 /language - Выбрать язык\n"
                 "⚙️ /status - Просмотреть текущие настройки\n"
                 "🗑️ /clear_context - Сбросить историю документов\n\n"
                 "О чем бы вы хотели узнать?"
             ),
             "Indonesian": (
                 "\U0001F44B <b>Halo! Saya asisten desain Anda</b>\n\n"
-                "Saya di sini untuk membantu arsitek, desainer, dan insinyur menavigasi peraturan konstruksi "
-                "dan dokumentasi teknis.\n\n"
+                "🏗️ Dapatkan rekomendasi konstruksi dan jawaban ahli untuk pertanyaan pembangunan Anda secara instan melalui bot Telegram pintar ini 🤖\n\n"
                 "Berikut cara saya dapat membantu Anda:\n\n"
                 "\U0001F4DA Akses peraturan konstruksi melalui /knowledge_base kami\n"
-                "\U0001F4CE Bagikan dokumen PDF apa pun, dan saya akan membantu Anda memahami isinya\n"
                 "❓ Ajukan pertanyaan dalam bahasa sederhana - saya akan menangani detail teknisnya\n\n"
                 "Perintah yang berguna untuk memulai:\n"
+                "🌐 /language - Pilih bahasa\n"
                 "\U0001F504 /start - Lihat pengantar ini lagi\n"
                 "⚙️ /status - Lihat pengaturan Anda saat ini\n"
                 "🗑️ /clear_context - Atur ulang riwayat dokumen Anda\n\n"

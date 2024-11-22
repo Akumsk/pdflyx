@@ -1,12 +1,10 @@
-# pytest.py
+# tests/pytest.py
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from handlers import (
     BotHandlers,
     WAITING_FOR_FOLDER_PATH,
-    WAITING_FOR_QUESTION,
-    WAITING_FOR_PROJECT_SELECTION,
 )
 
 # Import necessary telegram classes

@@ -38,8 +38,6 @@ def main():
     application.add_handler(CommandHandler("status", handlers.status))
     application.add_handler(CommandHandler("language", handlers.language))
     application.add_handler(CommandHandler("clear_context", handlers.clear_context))
-    application.add_handler(CommandHandler("request_access", handlers.request_access))
-    application.add_handler(CommandHandler("grant_access", handlers.grant_access))
 
     # Callback Query Handlers
     application.add_handler(

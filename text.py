@@ -20,8 +20,6 @@ class CommandDescriptions:
                 "status": "Display current status and information",
                 "clear_context": "Clear the current context",
                 "language": "Select your preferred language",
-                "request_access": "Request access to the bot",
-                "grant_access": "Grant access to a user (Admin only)",
             },
             "Russian": {
                 "start": "Показать вводное сообщение",
@@ -29,8 +27,6 @@ class CommandDescriptions:
                 "status": "Показать текущий статус и информацию",
                 "clear_context": "Очистить текущий контекст",
                 "language": "Выбрать предпочитаемый язык",
-                "request_access": "Запросить доступ к боту",
-                "grant_access": "Предоставить доступ пользователю (Только админ)",
             },
             "Indonesian": {
                 "start": "Tampilkan pesan pengantar",
@@ -38,8 +34,6 @@ class CommandDescriptions:
                 "status": "Tampilkan status dan informasi saat ini",
                 "clear_context": "Hapus konteks saat ini",
                 "language": "Pilih bahasa yang Anda inginkan",
-                "request_access": "Minta akses ke bot",
-                "grant_access": "Berikan akses ke pengguna (Hanya Admin)",
             },
             # Add more languages as needed
         }
@@ -52,8 +46,6 @@ class CommandDescriptions:
             BotCommand("status", lang_commands["status"]),
             BotCommand("clear_context", lang_commands["clear_context"]),
             BotCommand("language", lang_commands["language"]),
-            BotCommand("request_access", lang_commands["request_access"]),
-            BotCommand("grant_access", lang_commands["grant_access"]),
         ]
 
         return commands

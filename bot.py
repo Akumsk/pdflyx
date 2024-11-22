@@ -51,7 +51,6 @@ def main():
     )
 
     # Message Handlers
-    application.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_file))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_message)
     )

@@ -487,9 +487,9 @@ class BotHandlers:
                     parse_mode=ParseMode.HTML
                 )
                 return
-            index_status = llm_service.load_and_index_documents(folder_path)
-            if index_status != "Documents successfully indexed.":
-                logger.error(f"Error during load_and_index_documents: {index_status}")
+            index_status, index_message = llm_service.load_and_index_documents(folder_path)
+            if not index_status:
+                logger.error(f"Error during load_and_index_documents: {index_message}")
                 await query.message.reply_text(KnowledgeBaseResponses.indexing_error(language=language),
                                                parse_mode=ParseMode.HTML)
                 return

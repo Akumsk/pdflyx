@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from collections import defaultdict
 
-from helpers import current_timestamp
+from helpers import current_timestamp, get_language_name
 
 load_dotenv()
 db_password = os.getenv("DB_PASSWORD")
@@ -409,6 +409,7 @@ class DatabaseService:
         Saves or updates user information in the users table.
         On first insertion, sets current_language to language_code.
         """
+        language_name = get_language_name(language_code)
         now = current_timestamp()
         try:
             connection = self.connect()
@@ -437,7 +438,7 @@ class DatabaseService:
                     user_id,
                     user_name,
                     language_code,
-                    language_code,  # Initialize current_language with language_code
+                    language_name,  # Initialize current_language with language_code
                     now,
                     now
                 ),

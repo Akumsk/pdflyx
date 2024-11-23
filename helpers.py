@@ -95,3 +95,15 @@ def get_language_code(language_name):
         # Add more mappings as needed
     }
     return mapping.get(language_name, "en")
+
+def get_language_name(language_code):
+    """
+    Maps language names to their respective language codes.
+    """
+    mapping = {
+        "en": "English",
+        "ru": "Russian",
+        "id": "Indonesian",
+        # Add more mappings as needed
+    }
+    return mapping.get(language_code, "English")

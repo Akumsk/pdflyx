@@ -5,6 +5,8 @@ import warnings
 from io import StringIO
 import asyncio
 import datetime
+import hashlib
+import shutil
 
 import fitz
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
@@ -27,153 +29,231 @@ from pymupdf.mupdf import ll_pdf_lookup_substitute_font_outparams
 from db_service import DatabaseService
 from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER
 from helpers import current_timestamp, parser_html
+from pathlib import Path
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    vector_store = None  # Class variable to store the vector store
 
     def __init__(self, model_name=MODEL_NAME):
         self.llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name=model_name)
+        self.embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+
+    def _get_vector_store_path(self, folder_path):
+        """
+        Generate the vector store directory path within the knowledge base folder.
+        """
+        return Path(folder_path) / "vector_store"
+
+    def save_vector_store(self, folder_path):
+        """
+        Save the current vector store to disk within the specified knowledge base folder.
+        """
+        vector_store_dir = self._get_vector_store_path(folder_path)
+        try:
+            vector_store_dir.mkdir(parents=True, exist_ok=True)
+            self.vector_store.save_local(str(vector_store_dir))
+            logger.info(f"Vector store saved to {vector_store_dir}")
+        except Exception as e:
+            logger.error(f"Failed to save vector store to {vector_store_dir}: {e}")
+            raise
+
+    def load_vector_store(self, folder_path):
+        """
+        Load a saved vector store from disk within the specified knowledge base folder.
+        """
+        vector_store_dir = self._get_vector_store_path(folder_path)
+        if vector_store_dir.exists() and vector_store_dir.is_dir():
+            try:
+                # ⚠️ Security Warning: Ensure the vector store is from a trusted source before enabling dangerous deserialization.
+                self.vector_store = FAISS.load_local(
+                    str(vector_store_dir),
+                    self.embeddings,
+                    allow_dangerous_deserialization=True  # Enable dangerous deserialization
+                )
+                logger.info(f"Loaded vector store from {vector_store_dir}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to load vector store from {vector_store_dir}: {e}")
+                return False
+        else:
+            logger.info(f"No saved vector store found in {vector_store_dir}")
+            return False
 
     def load_and_index_documents(self, folder_path):
-        documents = []
-        found_valid_file = False
+        """
+        Load and index documents from the specified folder_path.
+        If a saved vector store exists, load it. Otherwise, load documents, index them, and save the vector store.
+        Returns a tuple (success: bool, message: str).
+        """
+        try:
+            # Check if vector store already exists
+            if self.load_vector_store(folder_path):
+                return (True, "Vector store loaded from existing files.")
 
-        for filename in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, filename)
+            documents = []
+            found_valid_file = False
 
-            if filename.endswith(".pdf"):
-                loader = PyMuPDFLoader(file_path)
-                docs = loader.load()
-                for doc in docs:
-                    doc.metadata["source"] = filename
+            for filename in os.listdir(folder_path):
+                file_path = os.path.join(folder_path, filename)
+
+                if filename.lower().endswith(".pdf"):
+                    loader = PyMuPDFLoader(file_path)
+                    docs = loader.load()
+                    for doc in docs:
+                        doc.metadata["source"] = filename
+                        documents.append(doc)
+                    found_valid_file = True
+
+                elif filename.lower().endswith(".docx"):
+                    content = self.load_word_file(file_path)
+                    doc = Document(page_content=content, metadata={"source": filename})
                     documents.append(doc)
-                found_valid_file = True
+                    found_valid_file = True
 
-            elif filename.endswith(".docx"):
-                content = self.load_word_file(file_path)
-                doc = Document(page_content=content, metadata={"source": filename})
-                documents.append(doc)
-                found_valid_file = True
+                elif filename.lower().endswith(".xlsx"):
+                    content = self.load_excel_file(file_path)
+                    doc = Document(page_content=content, metadata={"source": filename})
+                    documents.append(doc)
+                    found_valid_file = True
 
-            elif filename.endswith(".xlsx"):
-                content = self.load_excel_file(file_path)
-                doc = Document(page_content=content, metadata={"source": filename})
-                documents.append(doc)
-                found_valid_file = True
+            if not found_valid_file:
+                logger.warning("No valid files found in the folder. Please provide PDF, Word, or Excel files.")
+                return (False, "No valid files found in the folder. Please provide PDF, Word, or Excel files.")
 
-        if not found_valid_file:
-            return "No valid files found in the folder. Please provide PDF, Word, or Excel files."
+            text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            split_docs = text_splitter.split_documents(documents)
 
-        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        split_docs = text_splitter.split_documents(documents)
+            self.vector_store = FAISS.from_documents(split_docs, self.embeddings)
+            logger.info("Documents successfully indexed.")
 
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        LLMService.vector_store = FAISS.from_documents(split_docs, embeddings)
-        return "Documents successfully indexed."
+            # Save the newly created vector store
+            self.save_vector_store(folder_path)
+
+            return (True, "Documents successfully indexed and vector store saved.")
+
+        except Exception as e:
+            logger.error(f"Error during load_and_index_documents: {e}")
+            return (False, str(e))
 
     def generate_response(self, prompt, chat_history=None):
-        if not LLMService.vector_store:
-            return (
-                "Please set the folder path using /folder and ensure documents are loaded.",
-                None,
+        try:
+            if not hasattr(self, 'vector_store') or self.vector_store is None:
+                logger.warning("Vector store is not loaded. Prompting to set the folder path and load documents.")
+                return (
+                    "Please set the folder path using /folder and ensure documents are loaded.",
+                    None,
+                )
+
+            # Ensure chat_history is a list
+            if chat_history is None:
+                chat_history = []
+
+            # Create the retriever with k=DOCS_IN_RETRIEVER
+            retriever = self.vector_store.as_retriever(
+                search_kwargs={"k": DOCS_IN_RETRIEVER}
             )
 
-        # Ensure chat_history is a list
-        if chat_history is None:
-            chat_history = []
-
-        # Create the retriever with k=DOCS_IN_RETRIEVER
-        retriever = LLMService.vector_store.as_retriever(
-            search_kwargs={"k": DOCS_IN_RETRIEVER}
-        )
-
-        # Create the history-aware retriever
-        retriever_prompt = ChatPromptTemplate.from_messages(
-            [
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("user", "{input}"),
-                (
-                    "user",
-                    "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation",
-                ),
-            ]
-        )
-
-        history_aware_retriever = create_history_aware_retriever(
-            llm=self.llm, retriever=retriever, prompt=retriever_prompt
-        )
-
-        # Create the question-answering chain
-        system_prompt = (
-            "You are a project assistant from the consultant side on design and construction projects. "
-            "Use the following pieces of retrieved context to answer the question. "
-            "Your response should be formatted in HTML, using appropriate tags for headings, bold text, paragraphs, and lists as needed. "
-            "If you don't know the answer, say that you don't know. "
-            "Do not include references to the source documents in your answer. "
-            f"If you need to use the current date, today is {current_timestamp()}. "
-            "If the prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
-            "\n\n{context}"
-        )
-
-        prompt_template = ChatPromptTemplate.from_messages(
-            [
-                ("system", system_prompt),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("user", "{input}"),
-            ]
-        )
-
-        question_answer_chain = create_stuff_documents_chain(self.llm, prompt_template)
-
-        # Create the retrieval chain using create_retrieval_chain
-        rag_chain = create_retrieval_chain(
-            retriever=history_aware_retriever, combine_docs_chain=question_answer_chain
-        )
-
-        # Run the chain with the provided prompt and chat history
-        result = rag_chain.invoke({"input": prompt, "chat_history": chat_history})
-
-        answer = result.get("answer", "")
-        sources = result.get("context", [])
-
-        # Implement similarity threshold logic
-        # For demonstration, we'll assume that if sources are returned, they are relevant.
-        # You can enhance this by calculating similarity scores and setting a threshold.
-
-        if not sources:
-            return answer, None
-
-        source_files = set(
-            [doc.metadata["source"] for doc in sources if "source" in doc.metadata]
-        )
-
-        # Build the references
-        references = {}
-        for doc in sources:
-            filename = doc.metadata.get("source", "Unknown")
-            page = doc.metadata.get("page", "Unknown")
-            if filename not in references:
-                references[filename] = set()
-            references[filename].add(page)
-
-        # Placeholder for similarity check
-        # Implement your similarity logic here and set 'is_relevant' accordingly
-        is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)
-
-        if is_relevant:
-            answer_with_references = (
-                answer + "\n\n------------------" + "\nReferences:\n"
+            # Create the history-aware retriever
+            retriever_prompt = ChatPromptTemplate.from_messages(
+                [
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    ("user", "{input}"),
+                    (
+                        "user",
+                        "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation",
+                    ),
+                ]
             )
 
-            for doc_name, pages in references.items():
-                pages_list = sorted(pages)
-                pages_str = ", ".join(str(page) for page in pages_list)
-                answer_with_references += f"{doc_name}, pages: {pages_str}\n"
+            history_aware_retriever = create_history_aware_retriever(
+                llm=self.llm, retriever=retriever, prompt=retriever_prompt
+            )
 
-            return parser_html(answer_with_references), source_files
-        else:
-            return parser_html(answer), None
+            # Create the question-answering chain
+            system_prompt = (
+                "You are a project assistant from the consultant side on design and construction projects. "
+                "Use the following pieces of retrieved context to answer the question. "
+                "Your response should be formatted in HTML, using appropriate tags for headings, bold text, paragraphs, and lists as needed. "
+                "If you don't know the answer, say that you don't know. "
+                "Do not include references to the source documents in your answer. "
+                f"If you need to use the current date, today is {current_timestamp()}. "
+                "If the prompt includes a request to provide a link to documents in context, respond with: Please follow the link below:"
+                "\n\n{context}"
+            )
+
+            prompt_template = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system_prompt),
+                    MessagesPlaceholder(variable_name="chat_history"),
+                    ("user", "{input}"),
+                ]
+            )
+
+            question_answer_chain = create_stuff_documents_chain(self.llm, prompt_template)
+
+            # Create the retrieval chain using create_retrieval_chain
+            rag_chain = create_retrieval_chain(
+                retriever=history_aware_retriever, combine_docs_chain=question_answer_chain
+            )
+
+            # Run the chain with the provided prompt and chat history
+            result = rag_chain.invoke({"input": prompt, "chat_history": chat_history})
+
+            answer = result.get("answer", "")
+            sources = result.get("context", [])
+
+            # Implement similarity threshold logic
+            # For demonstration, we'll assume that if sources are returned, they are relevant.
+            # You can enhance this by calculating similarity scores and setting a threshold.
+
+            if not sources:
+                return answer, None
+
+            source_files = set(
+                [doc.metadata["source"] for doc in sources if "source" in doc.metadata]
+            )
+
+            # Build the references
+            references = {}
+            for doc in sources:
+                filename = doc.metadata.get("source", "Unknown")
+                page = doc.metadata.get("page", "Unknown")
+                if filename not in references:
+                    references[filename] = set()
+                references[filename].add(page)
+
+            # Placeholder for similarity check
+            # Implement your similarity logic here and set 'is_relevant' accordingly
+            is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)
+
+            if is_relevant:
+                answer_with_references = (
+                    answer + "\n\n------------------" + "\nReferences:\n"
+                )
+
+                for doc_name, pages in references.items():
+                    pages_list = sorted(pages)
+                    pages_str = ", ".join(str(page) for page in pages_list)
+                    answer_with_references += f"{doc_name}, pages: {pages_str}\n"
+
+                return parser_html(answer_with_references), source_files
+            else:
+                return parser_html(answer), None
+
+        except Exception as e:
+            logger.error(f"Error during generate_response: {e}")
+            return "⚠️ Ой! Что-то пошло не так при подготовке документов базы знаний.\nПопробуйте снова через несколько минут.", None
 
     def is_prompt_relevant_to_documents(self, prompt, sources):
         """

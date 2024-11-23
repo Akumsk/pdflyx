@@ -5,6 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from collections import defaultdict
 
+from helpers import current_timestamp
 
 load_dotenv()
 db_password = os.getenv("DB_PASSWORD")
@@ -408,7 +409,7 @@ class DatabaseService:
         Saves or updates user information in the users table.
         On first insertion, sets current_language to language_code.
         """
-        now = datetime.utcnow()
+        now = current_timestamp()
         try:
             connection = self.connect()
             cursor = connection.cursor()
@@ -425,7 +426,7 @@ class DatabaseService:
                     access, 
                     role
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, TRUE, FALSE, 'user')
+                VALUES (%s, %s, %s, %s, %s, %s, TRUE, TRUE, 'user')
                 ON CONFLICT (user_id) DO UPDATE
                 SET 
                     user_name = EXCLUDED.user_name,

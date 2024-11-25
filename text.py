@@ -983,17 +983,70 @@ class FileResponses:
 
 class ContextErrors:
     @staticmethod
-    def documents_not_indexed():
-        return (
-            "📚 Let's Get Started!\n\n"
-            "It seems we haven't set up any documents yet.\n"
-            "Please use /knowledge_base to choose a topic or upload some files to get started."
-        )
+    def documents_not_indexed(language="English"):
+        messages={
+            "English": (
+                "📚 Let's Get Started! 👋\n\n"
+                "It seems we haven't set up any documents yet. 🤔\n"
+                "Please use /knowledge_base to choose a topic! ✨"
+            ),
+            "Russian": (
+                "📚 Давайте начнем! 👋\n\n"
+                "Похоже, документы еще не настроены. 🤔\n"
+                "Пожалуйста, используйте /knowledge_base, чтобы выбрать тему! ✨"
+            ),
+            "Indonesian": (
+                "📚 Mari Mulai! 👋\n\n"
+                "Sepertinya kita belum menyiapkan dokumen apapun. 🤔\n"
+                "Silakan gunakan /knowledge_base untuk memilih topik! ✨"
+            ),
+        }
+        return messages[language]
 
     @staticmethod
-    def no_valid_documents():
-        return (
-            "📂 No Documents Found\n\n"
-            "I couldn't find any documents to work with.\n"
-            "Please make sure you've added some files to your folder or upload them here."
-        )
+    def no_valid_documents(language="English"):
+        messages = {
+            "English": (
+                "📂 No Documents Found\n\n"
+                "I couldn't find any documents to work with.\n"
+                "Please make sure you've added some files to your folder or upload them here."
+            ),
+            "Russian": (
+                "📂 Документы не найдены\n\n"
+                "Я не смог найти документы для работы.\n"
+                "Пожалуйста, убедитесь, что вы добавили файлы в папку или загрузите их здесь."
+            ),
+            "Indonesian": (
+                "📂 Tidak Ada Dokumen Ditemukan\n\n"
+                "Saya tidak dapat menemukan dokumen untuk diproses.\n"
+                "Pastikan Anda telah menambahkan beberapa file ke folder Anda atau unggah di sini."
+            ),
+        }
+        return messages[language]
+
+
+    def unknown_command(language="English"):
+        messages = {
+            "English": (
+                "\u2753 <b>I'm not sure what you mean.</b>\n\n"
+                "\U0001F4A1 You can try:\n"
+                "\u2022 Using /help to see available commands\n"
+                "\u2022 Asking me a question about construction or design\n"
+                "\u2022 Uploading a document for me to analyze"
+            ),
+            "Russian": (
+                "\u2753 <b>Я не уверен, что вы имеете в виду.</b>\n\n"
+                "\U0001F4A1 Вы можете попробовать:\n"
+                "\u2022 Использовать /help для просмотра доступных команд\n"
+                "\u2022 Задать мне вопрос о строительстве или дизайне\n"
+                "\u2022 Загрузить документ для анализа"
+            ),
+            "Indonesian": (
+                "\u2753 <b>Saya tidak yakin apa yang Anda maksud.</b>\n\n"
+                "\U0001F4A1 Anda dapat mencoba:\n"
+                "\u2022 Menggunakan /help untuk melihat perintah yang tersedia\n"
+                "\u2022 Mengajukan pertanyaan kepada saya tentang konstruksi atau desain\n"
+                "\u2022 Mengunggah dokumen untuk saya analisis"
+            ),
+        }
+        return messages[language]

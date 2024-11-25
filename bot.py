@@ -22,9 +22,12 @@ from exception_handlers import (
     error_handler,
 )
 
+import logging_config
+
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    # Setup logging
+    logging_config.setup_logging()
 
     handlers = BotHandlers()
 

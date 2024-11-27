@@ -49,21 +49,3 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-def handle_telegram_context_length_exceeded_error(error, user_id, data_context):
-    exception_id = str(uuid.uuid4())
-    exception_type = "ContextLengthExceededError"
-    exception_message = str(error)
-    stack_trace = "No stack trace available for context length exceeded."
-    occurred_at = datetime.now()
-    resolved = False
-
-    # Log the exception to the database
-    db_service.log_exception(
-        exception_type=exception_type,
-        exception_message=exception_message,
-        stack_trace=stack_trace,
-        occurred_at=occurred_at,
-        user_id=user_id,
-        data_context=data_context,
-        resolved=resolved,
-    )

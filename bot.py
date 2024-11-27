@@ -27,7 +27,16 @@ import logging_config
 
 def main():
     # Setup logging
-    logging_config.setup_logging()
+    logging_config.setup_logging(
+        log_directory='logs',
+        log_file_base='bot.log',
+        when='midnight',
+        interval=1,
+        backup_count=30,
+        console_log_level=logging.INFO,
+        file_log_level=logging.DEBUG,
+        max_log_length=1000,  # Adjust as needed
+    )
 
     handlers = BotHandlers()
 

@@ -561,11 +561,22 @@ class BotHandlers:
                 logger.warning(f"File '{file_path}' does not exist for user_id={user_id}")
                 return
 
-            # Offload the file sending to a background task
-            asyncio.create_task(
-                self.send_document_async(query, file_path, file_name, language, context)
-            )
-            logger.debug(f"Initiated async task to send file '{file_name}' to user_id={user_id}")
+            # Check download_access before sending the file
+            db_service = context.user_data["db_service"]
+            has_access = db_service.get_download_access(file_path)
+
+            if has_access:
+                # Offload the file sending to a background task
+                asyncio.create_task(
+                    self.send_document_async(query, file_path, file_name, language, context)
+                )
+                logger.debug(f"Initiated async task to send file '{file_name}' to user_id={user_id}")
+            else:
+                # Access denied, send an appropriate message
+                system_response = text.Responses.not_allowed_download(language=language)
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
+                logger.info(f"Download access denied for file '{file_path}' to user_id={user_id}")
         else:
             system_response = text.Responses.unknown_command(language=language)
             await query.message.reply_text(system_response)

@@ -16,6 +16,8 @@ gpt-4o-mini
 
 MAX_TOKENS_IN_CONTEXT = 128000
 
+RELEVANCE_THRESHOLD = 0.3
+
 knowledge_base_paths = {
     "Российские стандарты": r"E:\knowledge_base\russian_regulations",
     "Indonesian Regulations": r"E:\knowledge_base\indonesian_regulations",

@@ -18,9 +18,6 @@ from db_service import DatabaseService
 from handlers import (
     BotHandlers,
 )
-from exception_handlers import (
-    error_handler,
-)
 
 import logging_config
 
@@ -66,9 +63,6 @@ def main():
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_message)
     )
-
-    # Error Handler
-    application.add_error_handler(error_handler)
 
     application.run_polling()
 

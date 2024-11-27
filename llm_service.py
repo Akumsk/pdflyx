@@ -28,7 +28,7 @@ from pymupdf.mupdf import ll_pdf_lookup_substitute_font_outparams
 
 import text
 from db_service import DatabaseService
-from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER
+from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER, RELEVANCE_THRESHOLD
 from decorators import log_errors
 from helpers import current_timestamp, parser_html
 from pathlib import Path
@@ -282,7 +282,7 @@ class LLMService:
             logger.debug("Similarity threshold not met. Returning answer without references.")
             return parser_html(answer), None
 
-    def is_prompt_relevant_to_documents(self, prompt, sources):
+    def is_prompt_relevant_to_documents(self, prompt, sources, relevance_threshold = RELEVANCE_THRESHOLD):
         """
         Determine if the prompt is relevant to the retrieved documents.
         Implement a similarity check or any other logic as needed.
@@ -298,9 +298,6 @@ class LLMService:
 
             # Calculate overlap
             overlap = prompt_keywords.intersection(source_keywords)
-
-            # Define a threshold for relevance
-            relevance_threshold = 0.1  # 10% overlap
 
             if len(prompt_keywords) == 0:
                 logger.debug("No keywords extracted from the prompt.")
@@ -395,14 +392,6 @@ class LLMService:
                     content = " ".join([doc.page_content for doc in docs])
                     logger.debug(f"Loaded content from PDF '{filename}'")
 
-                elif filename.endswith(".docx"):
-                    content = self.load_word_file(file_path)
-                    logger.debug(f"Loaded content from Word '{filename}'")
-
-                elif filename.endswith(".xlsx"):
-                    content = self.load_excel_file(file_path)
-                    logger.debug(f"Loaded content from Excel '{filename}'")
-
                 else:
                     logger.debug(f"Unsupported file type for '{filename}'. Skipping.")
                     continue  # Skip unsupported file types
@@ -411,31 +400,39 @@ class LLMService:
                 content_sample = content[:2000]
                 logger.debug(f"Prepared content sample for '{filename}'")
 
-                # Generate AI description and document type
+                # Generate AI description, document type, and language
                 prompt = (
-                    "Please analyze the following document content and provide the document type and a brief description in the following format:\n\n"
+                    "Analyze the following document content and provide the document type, a brief description, and the language (select one primary language if the document is multilingua) in the following format:\n\n"
                     "Document Type: [document type]\n"
-                    "Description: [description]\n\n"
+                    "Description: [description]\n"
+                    "Language: [language]\n\n"
                     "Content:\n"
                     f"{content_sample}"
                 )
 
                 try:
-                    response = self.llm(prompt)
-                    logger.debug(f"LLM response for '{filename}': {response}")
+                    response = self.llm.invoke(prompt)  # Adjust this method if necessary
+                    response_text = response.content  # Access the text content
+                    logger.debug(f"LLM response for '{filename}': {response_text}")
                 except Exception as e:
                     logger.error(f"Error generating response from LLM for '{filename}': {e}")
-                    response = ""
+                    response_text = ""
 
-                # Extract description and document type from response
+                # Extract description, document type, and language from response
                 document_type = ""
                 description = ""
-                lines = response.strip().split("\n")
-                for line in lines:
-                    if line.lower().startswith("document type:"):
-                        document_type = line[len("document type:"):].strip()
-                    elif line.lower().startswith("description:"):
-                        description = line[len("description:"):].strip()
+                language = ""
+                if isinstance(response_text, str):
+                    lines = response_text.strip().split("\n")
+                    for line in lines:
+                        if line.lower().startswith("document type:"):
+                            document_type = line[len("document type:"):].strip()
+                        elif line.lower().startswith("description:"):
+                            description = line[len("description:"):].strip()
+                        elif line.lower().startswith("language:"):
+                            language = line[len("language:"):].strip()
+                else:
+                    logger.error(f"Unexpected response type for '{filename}': {type(response_text)}")
 
                 # Append metadata as a dictionary to the list
                 metadata_list.append(
@@ -445,12 +442,14 @@ class LLMService:
                         "document_type": document_type,
                         "date_modified": date_modify_str,
                         "description": description,
+                        "language": language,  # New language field
                     }
                 )
-                logger.info(f"Extracted metadata for '{filename}': Type='{document_type}', Description='{description}'")
+                logger.info(
+                    f"Extracted metadata for '{filename}': Type='{document_type}', Description='{description}', Language='{language}'")
 
             # After processing all files, mark files as deleted if they are not in the folder
-            db_service.mark_files_as_deleted(existing_file_paths)
+#            db_service.mark_files_as_deleted(existing_file_paths)
             logger.debug("Completed metadata extraction and database update.")
 
         except Exception as e:

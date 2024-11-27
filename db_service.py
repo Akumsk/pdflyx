@@ -40,8 +40,8 @@ class DatabaseService:
             cursor = connection.cursor()
 
             insert_query = """
-                INSERT INTO documents_server (filename, path_file, document_type, date_modified, date_of_analysis, description, deleted)
-                VALUES (%s, %s, %s, %s, %s, %s, FALSE)
+                INSERT INTO documents_server (filename, path_file, document_type, date_modified, date_of_analysis, description, language, deleted)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE)
                 ON CONFLICT (path_file) DO UPDATE
                 SET
                     filename = EXCLUDED.filename,
@@ -49,6 +49,7 @@ class DatabaseService:
                     date_modified = EXCLUDED.date_modified,
                     date_of_analysis = EXCLUDED.date_of_analysis,
                     description = EXCLUDED.description,
+                    language = EXCLUDED.language,
                     deleted = FALSE
             """
 
@@ -57,9 +58,7 @@ class DatabaseService:
                 date_modified = datetime.strptime(
                     item["date_modified"], "%Y-%m-%d %H:%M:%S"
                 )
-                date_of_analysis = (
-                    datetime.utcnow()
-                )  # Current timestamp for analysis time
+                date_of_analysis = datetime.utcnow()  # Current timestamp for analysis time
 
                 cursor.execute(
                     insert_query,
@@ -70,6 +69,7 @@ class DatabaseService:
                         date_modified,
                         date_of_analysis,
                         item["description"],
+                        item["language"],  # New language parameter
                     ),
                 )
 
@@ -159,6 +159,37 @@ class DatabaseService:
         except Exception as e:
             print(f"Error retrieving file paths: {e}")
             return []
+        finally:
+            cursor.close()
+            connection.close()
+
+    def get_download_access(self, path_file):
+        """
+        Retrieves the download_access status for a given file.
+
+        Args:
+            path_file (str): The path of the file to check access for.
+
+        Returns:
+            bool: True if download is allowed, False otherwise.
+        """
+        try:
+            connection = self.connect()
+            cursor = connection.cursor()
+            query = """
+                SELECT download_access FROM documents_server
+                WHERE path_file = %s AND deleted = FALSE
+            """
+            cursor.execute(query, (path_file,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]  # Assuming download_access is a boolean
+            else:
+                # If the file doesn't exist or is marked as deleted
+                return False
+        except Exception as e:
+            print(f"Error checking download access for file {path_file}: {e}")
+            return False
         finally:
             cursor.close()
             connection.close()

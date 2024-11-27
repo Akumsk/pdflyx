@@ -512,6 +512,31 @@ class Responses:
         return messages[language]
 
     @staticmethod
+    def not_allowed_download(language="English"):
+        messages = {
+            "English": (
+                "🚫 Access Restricted 😔\n\n"
+                "Oops! This file cannot be downloaded at the moment. 🔒\n"
+                "Perhaps the copyright holder has restricted download rights. 🛡️\n"
+                "We respect intellectual property guidelines. 💡"
+            ),
+            "Russian": (
+                "🚫 Доступ ограничен 😔\n\n"
+                "Упс! В данный момент этот файл нельзя загрузить. 🔒\n"
+                "Возможно, правообладатель ограничил права на загрузку. 🛡️\n"
+                "Мы уважаем правила интеллектуальной собственности. 💡"
+            ),
+            "Indonesian": (
+                "🚫 Akses Dibatasi 😔\n\n"
+                "Ups! File ini tidak dapat diunduh saat ini. 🔒\n"
+                "Mungkin pemegang hak cipta telah membatasi hak unduhan. 🛡️\n"
+                "Kami menghormati pedoman hak kekayaan intelektual. 💡"
+            ),
+        }
+        return messages[language]
+
+
+    @staticmethod
     def documents_indexed(language="English"):
         messages = {
             "English": (

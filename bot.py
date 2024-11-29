@@ -58,6 +58,9 @@ def main():
     application.add_handler(
         CallbackQueryHandler(handlers.set_language, pattern=r"^set_language:")
     )
+    application.add_handler(
+        CallbackQueryHandler(handlers.handle_inline_buttons)
+    )
 
     # Message Handlers
     application.add_handler(

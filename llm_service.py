@@ -7,11 +7,13 @@ import asyncio
 import datetime
 import hashlib
 import shutil
+import numpy as np
 
 import fitz
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
+from langchain.chains.llm import LLMChain
 from langchain.chains.retrieval import create_retrieval_chain
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, BaseMessage
 from langchain_core.prompts import (
     ChatPromptTemplate,
     MessagesPlaceholder,
@@ -28,7 +30,8 @@ from pymupdf.mupdf import ll_pdf_lookup_substitute_font_outparams
 
 import text
 from db_service import DatabaseService
-from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER, RELEVANCE_THRESHOLD
+from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER, RELEVANCE_THRESHOLD_DOCS, \
+    RELEVANCE_THRESHOLD_PROMPT
 from decorators import log_errors
 from helpers import current_timestamp, parser_html
 from pathlib import Path
@@ -173,43 +176,43 @@ class LLMService:
     def generate_response(self, prompt, chat_history=None):
         """
         Generate a response to the user's prompt using the LLM and the vector store.
-        Returns a tuple (response: str, source_files: list or None)
+        Returns a tuple (response: str, source_files: list or None, suggestions: list or None)
         """
         if not hasattr(self, 'vector_store') or self.vector_store is None:
             logger.warning("Vector store is not loaded. Prompting to set the folder path and load documents.")
             return (
                 "Please set the folder path using /folder and ensure documents are loaded.",
                 None,
+                None
             )
 
         # Ensure chat_history is a list
         if chat_history is None:
             chat_history = []
 
-        # Create the retriever with k=DOCS_IN_RETRIEVER
-        retriever = self.vector_store.as_retriever(
-            search_kwargs={"k": DOCS_IN_RETRIEVER}
+        # Retrieve documents with similarity scores
+        retrieved_docs_with_scores = self.vector_store.similarity_search_with_score(
+            prompt, k=DOCS_IN_RETRIEVER
         )
-        logger.debug("Retriever created from vector store.")
+        logger.debug("Retrieved documents with similarity scores.")
 
-        # Create the history-aware retriever
-        retriever_prompt = ChatPromptTemplate.from_messages(
-            [
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("user", "{input}"),
-                (
-                    "user",
-                    "Given the above conversation, generate a search query to look up in order to get information relevant to the conversation",
-                ),
-            ]
-        )
+        retrieved_docs = [doc for doc, _ in retrieved_docs_with_scores]
 
-        history_aware_retriever = create_history_aware_retriever(
-            llm=self.llm, retriever=retriever, prompt=retriever_prompt
-        )
-        logger.debug("History-aware retriever created.")
+        # Compute embeddings similarity
+        relevance_scores = self.compute_embeddings_similarity(prompt, retrieved_docs)
 
-        # Create the question-answering chain
+        # Filter relevant documents based on similarity threshold
+        relevant_docs = [doc for doc, similarity in relevance_scores if similarity >= RELEVANCE_THRESHOLD_DOCS]
+
+        if not relevant_docs:
+            logger.debug("No relevant documents found for the prompt.")
+            answer = "I'm sorry, I could not find relevant information to answer your question."
+            return parser_html(answer), None, None
+
+        # Build the context string
+        context_str = "\n\n".join([doc.page_content for doc in relevant_docs])
+
+        # Create the prompt template
         system_prompt = (
             "You are a project assistant from the consultant side on design and construction projects."
             " If you don't know the answer, say that you don't know."
@@ -228,35 +231,25 @@ class LLMService:
                 ("user", "{input}"),
             ]
         )
-        logger.debug("Prompt template for QA chain created.")
 
-        question_answer_chain = create_stuff_documents_chain(self.llm, prompt_template)
-        logger.debug("Question-answering chain created.")
+        # Create the chain using RunnableSequence
+        chain = prompt_template | self.llm
 
-        # Create the retrieval chain using create_retrieval_chain
-        rag_chain = create_retrieval_chain(
-            retriever=history_aware_retriever, combine_docs_chain=question_answer_chain
-        )
-        logger.debug("Retrieval-Augmented Generation (RAG) chain created.")
+        # Call the chain with the prompt, chat_history, and context
+        result = chain.invoke({"input": prompt, "chat_history": chat_history, "context": context_str})
 
-        # Run the chain with the provided prompt and chat history
-        result = rag_chain.invoke({"input": prompt, "chat_history": chat_history})
-        logger.debug("RAG chain invoked with user prompt.")
-
-        answer = result.get("answer", "")
-        sources = result.get("context", [])
-
-        if not sources:
-            logger.debug("No sources retrieved for the prompt.")
-            return answer, None
-
-        source_files = set(
-            [doc.metadata["source"] for doc in sources if "source" in doc.metadata]
-        )
+        # Extract the answer text
+        if isinstance(result, BaseMessage):
+            answer = result.content
+        elif isinstance(result, str):
+            answer = result
+        else:
+            logger.error(f"Unexpected result type from chain: {type(result)}")
+            answer = str(result)
 
         # Build the references
         references = {}
-        for doc in sources:
+        for doc in relevant_docs:
             filename = doc.metadata.get("source", "Unknown")
             page = doc.metadata.get("page", "Unknown")
             if filename not in references:
@@ -264,49 +257,130 @@ class LLMService:
             references[filename].add(page)
 
         # Implement similarity threshold
-        is_relevant = self.is_prompt_relevant_to_documents(prompt, sources)
+        is_relevant = self.is_prompt_relevant_to_documents(relevance_scores)
 
         if is_relevant:
+            # Build the answer with references
             answer_with_references = (
                     answer + "\n\n------------------" + "\nReferences:\n"
             )
-
             for doc_name, pages in references.items():
                 pages_list = sorted(pages)
                 pages_str = ", ".join(str(page) for page in pages_list)
                 answer_with_references += f"{doc_name}, pages: {pages_str}\n"
-
-            logger.debug("Similarity threshold met. References appended to the answer.")
-            return parser_html(answer_with_references), source_files
+            logger.debug(f"References appended to the answer. RELEVANCE_THRESHOLD_DOCS: {RELEVANCE_THRESHOLD_DOCS}")
+            response = parser_html(answer_with_references)
+            source_files = set([doc.metadata.get("source") for doc in relevant_docs])
         else:
             logger.debug("Similarity threshold not met. Returning answer without references.")
-            return parser_html(answer), None
+            response = parser_html(answer)
+            source_files = None
 
-    def is_prompt_relevant_to_documents(self, prompt, sources, relevance_threshold = RELEVANCE_THRESHOLD):
+        # Generate suggestions based on user prompt and LLM response
+        suggestions = self.generate_suggestions(user_prompt=prompt, llm_response=answer, n=3)
+
+        return response, source_files, suggestions
+
+    def generate_suggestions(self, user_prompt, llm_response, n=3):
         """
-        Determine if the prompt is relevant to the retrieved documents.
-        Implement a similarity check or any other logic as needed.
-        For demonstration, we'll perform a simple keyword overlap.
+        Generate up to n suggestions to help the user continue the conversation.
+        Suggestions are based on the user prompt and the LLM's response.
+
+        Parameters:
+            user_prompt (str): The original prompt from the user.
+            llm_response (str): The response generated by the LLM.
+            n (int): Maximum number of suggestions to generate.
+
+        Returns:
+            List[str] or None: A list of suggestion strings or None if no suggestions are needed.
         """
         try:
-            # Extract keywords from the prompt
-            prompt_keywords = set(prompt.lower().split())
+            logger.debug("Generating suggestions based on user prompt and LLM response.")
 
-            # Extract keywords from the sources
-            source_text = " ".join([doc.page_content.lower() for doc in sources])
-            source_keywords = set(source_text.split())
+            # Define the prompt for generating suggestions
+            suggestion_prompt = (
+                "Given the following user prompt and LLM response, determine if additional information is needed to help the user fulfill their request and continue the conversation effectively. "
+                "If yes, provide up to {n} additional prompts based on key concepts in the response, such as 'learn more about ...', 'how to determine ...', 'how to calculate ...', etc., that the user can use to gather more information. "
+                "If no additional prompts are needed, respond with 'No suggestions needed'.\n\n"
+                f"User Prompt: {user_prompt}\n\n"
+                f"LLM Response: {llm_response}\n\n"
+                "Suggestions:"
+            ).format(n=n)
 
-            # Calculate overlap
-            overlap = prompt_keywords.intersection(source_keywords)
+            # Generate the suggestions using the LLM
+            # Use predict method for simplicity
+            generated_text = self.llm.predict(suggestion_prompt)
 
-            if len(prompt_keywords) == 0:
-                logger.debug("No keywords extracted from the prompt.")
-                return False
+            # Extract the text from the response
+            if generated_text.strip().lower() == "no suggestions needed.":
+                logger.debug("LLM determined that no suggestions are needed.")
+                return None
 
-            similarity_ratio = len(overlap) / len(prompt_keywords)
-            logger.debug(f"Similarity ratio: {similarity_ratio}")
+            # Split the suggestions by lines or numbers
+            suggestions = []
+            for line in generated_text.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # Remove leading numbers or bullets
+                if line[0].isdigit() and '.' in line:
+                    line = line.split('.', 1)[1].strip()
+                elif line.startswith('-'):
+                    line = line[1:].strip()
+                suggestions.append(line)
 
-            return similarity_ratio >= relevance_threshold
+            # Limit to n suggestions
+            suggestions = suggestions[:n]
+
+            if not suggestions:
+                logger.debug("LLM did not provide any valid suggestions.")
+                return None
+
+            logger.debug(f"Generated suggestions: {suggestions}")
+            return suggestions
+        except Exception as e:
+            logger.exception(f"Error generating suggestions: {str(e)}")
+            return None
+
+    def compute_embeddings_similarity(self, prompt, documents):
+        """
+        Compute the cosine similarity between the prompt and each document.
+        Returns a list of tuples (document, similarity_score)
+        """
+        try:
+            # Get embedding of the prompt
+            prompt_embedding = self.embeddings.embed_query(prompt)
+            prompt_embedding = np.array(prompt_embedding)
+
+            relevance_scores = []
+            for doc in documents:
+                doc_embedding = self.embeddings.embed_query(doc.page_content)
+                doc_embedding = np.array(doc_embedding)
+
+                # Compute cosine similarity
+                dot_product = np.dot(prompt_embedding, doc_embedding)
+                norm_prompt = np.linalg.norm(prompt_embedding)
+                norm_doc = np.linalg.norm(doc_embedding)
+                if norm_prompt == 0 or norm_doc == 0:
+                    similarity = 0.0
+                else:
+                    similarity = dot_product / (norm_prompt * norm_doc)
+                relevance_scores.append((doc, similarity))
+
+            return relevance_scores
+
+        except Exception as e:
+            logger.exception(f"Error computing embeddings similarity: {str(e)}")
+            return []
+
+    def is_prompt_relevant_to_documents(self, relevance_scores, relevance_threshold=RELEVANCE_THRESHOLD_PROMPT):
+        """
+        Determine if the prompt is relevant to the retrieved documents based on embeddings similarity.
+        """
+        try:
+            max_similarity = max([similarity for _, similarity in relevance_scores], default=0.0)
+            logger.debug(f"Maximum similarity: {max_similarity}, RELEVANCE_THRESHOLD_PROMPT: {RELEVANCE_THRESHOLD_PROMPT}")
+            return max_similarity >= relevance_threshold
         except Exception as e:
             logger.exception(f"Error in is_prompt_relevant_to_documents: {str(e)}")
             return False

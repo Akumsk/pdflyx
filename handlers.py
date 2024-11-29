@@ -429,17 +429,10 @@ class BotHandlers:
         context.user_data["system_response"] = system_response
         logger.info(f"Context cleared for user_id={user_id}")
 
-    @authorized_only
-    @initialize_services
-    @ensure_documents_indexed
-    @log_event(event_type="ai_conversation")
-    @log_errors(default_return=None)
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle any text message sent by the user."""
-
+    async def _process_user_message(self, user_message, update, context):
+        """Process a user message and generate a response."""
         db_service = context.user_data["db_service"]
         llm_service = context.user_data["llm_service"]
-        user_message = update.message.text
         user_id = context.user_data["user_id"]
         language = context.user_data.get("language", "English")
 
@@ -463,52 +456,25 @@ class BotHandlers:
         except Exception as e:
             logger.exception(f"Failed to retrieve chat history for user_id={user_id}: {e}")
             system_response = text.Responses.generic_error(language=language)
-            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
+            await update.effective_message.reply_text(system_response, parse_mode=ParseMode.HTML)
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
 
         try:
             # Generate response using LLM service
-            response, source_files = llm_service.generate_response(
+            response, source_files, suggestions = llm_service.generate_response(
                 user_message, chat_history=chat_history
             )
             logger.info(f"Generated response for user_id={user_id}")
         except Exception as e:
             logger.exception(f"Error during generate_response for user_id {user_id}: {e}")
             system_response = text.Responses.processing_error(language=language)
-            await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
-            # Save event log
+            await update.effective_message.reply_text(system_response, parse_mode=ParseMode.HTML)
             context.user_data["system_response"] = system_response
             return ConversationHandler.END
 
-        # Prepare the bot's response
-        bot_message = f"{response}"
-
-        try:
-            # Send the response with HTML parsing
-            if source_files:
-                # Send message with file links and references
-                keyboard = []
-                file_id_map = {}
-                for idx, file in enumerate(source_files):
-                    file_id = f"file_{idx}"
-                    file_id_map[file_id] = file
-                    keyboard.append(
-                        [InlineKeyboardButton(file, callback_data=f"get_file:{file_id}")]
-                    )
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(bot_message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-                context.user_data["file_id_map"] = file_id_map
-                logger.info(f"Sent response with source files to user_id={user_id}")
-            else:
-                # Send bot message without inline buttons
-                await update.message.reply_text(bot_message, parse_mode=ParseMode.HTML)
-                logger.info(f"Sent response to user_id={user_id}")
-        except Exception as e:
-            # If it fails, send without parse mode
-            logger.warning(f"Failed to send message with HTML parse mode for user_id {user_id}: {e}")
-            await update.message.reply_text(bot_message)
-            logger.info(f"Sent response without parse mode to user_id={user_id}")
+        # Prepare the bot's message
+        bot_message = response
 
         # Save the bot's message
         try:
@@ -519,6 +485,99 @@ class BotHandlers:
 
         # Store the system response in context
         context.user_data["system_response"] = bot_message
+
+        try:
+            # Send the response with HTML parsing
+            keyboard = []
+            file_id_map = {}
+
+            if source_files:
+                # Prepare file download buttons
+                for idx, file in enumerate(source_files):
+                    file_id = f"file_{idx}"
+                    file_id_map[file_id] = file
+                    keyboard.append(
+                        [InlineKeyboardButton(file, callback_data=f"get_file:{file_id}")]
+                    )
+                context.user_data["file_id_map"] = file_id_map
+                logger.info(f"Prepared file download buttons for user_id={user_id}")
+
+            if suggestions:
+                # Prepare suggestion buttons
+                suggestion_id_map = {}
+                for idx, suggestion in enumerate(suggestions):
+                    suggestion_id = f"suggestion_{idx}"
+                    suggestion_id_map[suggestion_id] = suggestion
+                    keyboard.append(
+                        [InlineKeyboardButton(suggestion, callback_data=f"suggestion:{suggestion_id}")]
+                    )
+                context.user_data["suggestion_id_map"] = suggestion_id_map
+                logger.info(f"Prepared suggestion buttons for user_id={user_id}")
+
+            if keyboard:
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.effective_message.reply_text(bot_message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent response with inline buttons to user_id={user_id}")
+            else:
+                # Send bot message without inline buttons
+                await update.effective_message.reply_text(bot_message, parse_mode=ParseMode.HTML)
+                logger.info(f"Sent response to user_id={user_id}")
+
+        except Exception as e:
+            # If it fails, send without parse mode
+            logger.warning(f"Failed to send message with HTML parse mode for user_id {user_id}: {e}")
+            await update.effective_message.reply_text(bot_message)
+            logger.info(f"Sent response without parse mode to user_id={user_id}")
+
+    @authorized_only
+    @initialize_services
+    @ensure_documents_indexed
+    @log_event(event_type="ai_conversation")
+    @log_errors(default_return=None)
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle any text message sent by the user."""
+        user_message = update.message.text
+        await self._process_user_message(user_message, update, context)
+
+    @authorized_only
+    @initialize_services
+    @log_event(event_type="inline_button")
+    @log_errors(default_return=None)
+    async def handle_inline_buttons(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle inline button callbacks."""
+        query = update.callback_query
+        language = context.user_data.get("language", "English")
+        user_id = update.effective_user.id
+
+        # Immediately answer the callback to prevent timeout
+        await query.answer()
+        data = query.data
+
+        if data.startswith("suggestion:"):
+            suggestion_id = data[len("suggestion:"):]
+            suggestion_id_map = context.user_data.get("suggestion_id_map", {})
+            suggestion = suggestion_id_map.get(suggestion_id)
+
+            if not suggestion:
+                system_response = "Suggestion not found or expired."
+                await query.message.reply_text(system_response)
+                context.user_data["system_response"] = system_response
+                logger.warning(f"Suggestion ID '{suggestion_id}' not found for user_id={user_id}")
+                return
+
+            # Log the usage of the suggestion
+            logger.info(f"User_id={user_id} clicked on suggestion '{suggestion}'")
+
+            # Call _process_user_message with the suggestion
+            await self._process_user_message(suggestion, update, context)
+        elif data.startswith("get_file:"):
+            # ... [Handle file download] ...
+            pass
+        else:
+            system_response = text.Responses.unknown_command(language=language)
+            await query.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
+            logger.warning(f"Unknown callback data '{data}' received from user_id={user_id}")
 
     @authorized_only
     @initialize_services

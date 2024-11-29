@@ -14,10 +14,6 @@ gpt-4o
 gpt-4o-mini
 """
 
-MAX_TOKENS_IN_CONTEXT = 128000
-
-RELEVANCE_THRESHOLD = 0.3
-
 knowledge_base_paths = {
     "Российские стандарты": r"E:\knowledge_base\russian_regulations",
     "Indonesian Regulations": r"E:\knowledge_base\indonesian_regulations",
@@ -26,5 +22,7 @@ knowledge_base_paths = {
 
 SUPPORTED_LANGUAGES = ["English", "Russian", "Indonesian"]
 
-CHAT_HISTORY_LEVEL = 10
-DOCS_IN_RETRIEVER = 5
+CHAT_HISTORY_LEVEL = 5
+DOCS_IN_RETRIEVER = 4
+RELEVANCE_THRESHOLD_DOCS = 0.7
+RELEVANCE_THRESHOLD_PROMPT = 0.8

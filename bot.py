@@ -47,6 +47,7 @@ def main():
     application.add_handler(CommandHandler("status", handlers.status))
     application.add_handler(CommandHandler("language", handlers.language))
     application.add_handler(CommandHandler("clear_context", handlers.clear_context))
+    application.add_handler(CommandHandler("references", handlers.references_command))
 
     # Callback Query Handlers
     application.add_handler(

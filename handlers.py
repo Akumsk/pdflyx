@@ -429,7 +429,40 @@ class BotHandlers:
         context.user_data["system_response"] = system_response
         logger.info(f"Context cleared for user_id={user_id}")
 
-    async def _process_user_message(self, user_message, update, context):
+    @authorized_only
+    @initialize_services
+    @log_event(event_type="command")
+    @log_errors(default_return=None)
+    async def references_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle the /references command."""
+        language = context.user_data.get("language", "English")
+        user_id = update.effective_user.id
+        source_files = context.user_data.get("source_files", [])
+
+        if not source_files:
+            system_response = "No references available."
+            await update.message.reply_text(system_response)
+            context.user_data["system_response"] = system_response
+            logger.info(f"No references available for user_id={user_id}")
+            return
+
+        # Send message "Please select reference for downloading below"
+        system_response = "Please select reference for downloading below"
+        keyboard = []
+        file_id_map = {}
+        for idx, file in enumerate(source_files):
+            file_id = f"file_{idx}"
+            file_id_map[file_id] = file
+            keyboard.append(
+                [InlineKeyboardButton(file, callback_data=f"get_file:{file_id}")]
+            )
+        context.user_data["file_id_map"] = file_id_map
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(system_response, reply_markup=reply_markup)
+        context.user_data["system_response"] = system_response
+        logger.info(f"Sent reference buttons to user_id={user_id}")
+
+    async def _process_user_message(self, user_message, update, context, prepend_user_message=False):
         """Process a user message and generate a response."""
         db_service = context.user_data["db_service"]
         llm_service = context.user_data["llm_service"]
@@ -474,7 +507,10 @@ class BotHandlers:
             return ConversationHandler.END
 
         # Prepare the bot's message
-        bot_message = response
+        if prepend_user_message:
+            bot_message = f"{user_message}\n-----------\n{response}"
+        else:
+            bot_message = response
 
         # Save the bot's message
         try:
@@ -486,22 +522,16 @@ class BotHandlers:
         # Store the system response in context
         context.user_data["system_response"] = bot_message
 
+        # Update source_files if new references are provided
+        if source_files:
+            context.user_data["source_files"] = source_files  # Replace with new references
+        else:
+            # Do not update source_files if no new references are provided
+            context.user_data["source_files"] = []  # Clear references
+
         try:
             # Send the response with HTML parsing
             keyboard = []
-            file_id_map = {}
-
-            if source_files:
-                # Prepare file download buttons
-                for idx, file in enumerate(source_files):
-                    file_id = f"file_{idx}"
-                    file_id_map[file_id] = file
-                    keyboard.append(
-                        [InlineKeyboardButton(file, callback_data=f"get_file:{file_id}")]
-                    )
-                context.user_data["file_id_map"] = file_id_map
-                logger.info(f"Prepared file download buttons for user_id={user_id}")
-
             if suggestions:
                 # Prepare suggestion buttons
                 suggestion_id_map = {}
@@ -516,7 +546,8 @@ class BotHandlers:
 
             if keyboard:
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.effective_message.reply_text(bot_message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+                await update.effective_message.reply_text(bot_message, reply_markup=reply_markup,
+                                                          parse_mode=ParseMode.HTML)
                 logger.info(f"Sent response with inline buttons to user_id={user_id}")
             else:
                 # Send bot message without inline buttons
@@ -528,6 +559,7 @@ class BotHandlers:
             logger.warning(f"Failed to send message with HTML parse mode for user_id {user_id}: {e}")
             await update.effective_message.reply_text(bot_message)
             logger.info(f"Sent response without parse mode to user_id={user_id}")
+
 
     @authorized_only
     @initialize_services
@@ -568,8 +600,9 @@ class BotHandlers:
             # Log the usage of the suggestion
             logger.info(f"User_id={user_id} clicked on suggestion '{suggestion}'")
 
-            # Call _process_user_message with the suggestion
-            await self._process_user_message(suggestion, update, context)
+            # Call _process_user_message with the suggestion and prepend_user_message flag
+            await self._process_user_message(suggestion, update, context, prepend_user_message=True)
+
         elif data.startswith("get_file:"):
             # ... [Handle file download] ...
             pass

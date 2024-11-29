@@ -262,7 +262,7 @@ class LLMService:
         if is_relevant:
             # Build the answer with references
             answer_with_references = (
-                    answer + "\n\n------------------" + "\nReferences:\n"
+                    answer + "\n\n------------------" + "\nReferences (/references):\n"
             )
             for doc_name, pages in references.items():
                 pages_list = sorted(pages)

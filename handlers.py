@@ -17,10 +17,11 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 
+from llm_service import LLMService
 from settings import CHAT_HISTORY_LEVEL, knowledge_base_paths, SUPPORTED_LANGUAGES
 from db_service import DatabaseService
 from decorators import log_errors, log_event, authorized_only, initialize_services, ensure_documents_indexed
-from helpers import messages_to_langchain_messages, get_language_code
+from helpers import messages_to_langchain_messages, get_language_code, get_language_name
 import text
 from text import KnowledgeBaseResponses, CommandDescriptions
 
@@ -32,12 +33,28 @@ class BotHandlers:
     def __init__(self):
         pass
 
+    def initialize_database_service(self):
+        try:
+            db_service = DatabaseService()
+            return db_service
+        except Exception as e:
+            logger.error(f"Failed to initialize DatabaseService: {e}")
+            return None
+
+    def initialize_llm_service(self):
+        try:
+            llm_service = LLMService()
+            return llm_service
+        except Exception as e:
+            logger.error(f"Failed to initialize LLMService: {e}")
+            return None
+
     async def post_init(self, application):
         """
         Initializes bot commands with multilingual support.
         """
         for language in SUPPORTED_LANGUAGES:
-            commands = CommandDescriptions.get_commands(language=language)
+            commands = text.CommandDescriptions.get_commands(language=language)
             language_code = get_language_code(language)
             try:
                 await application.bot.set_my_commands(
@@ -48,29 +65,69 @@ class BotHandlers:
             except Exception as e:
                 logger.exception(f"Failed to set commands for {language} ({language_code}): {e}")
 
+    async def global_error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Global error handler to catch and log all exceptions.
+        """
+        logger.error("Exception while handling an update:", exc_info=context.error)
+
+        # Optionally, notify administrators or take corrective actions
+        if isinstance(update, Update) and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "An unexpected error occurred. Please try again later."
+                )
+            except Exception as e:
+                logger.error(f"Failed to send error message to user: {e}")
+
+
     @initialize_services
     @log_event(event_type="command")
     @log_errors(default_return=None)
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = context.user_data["user_id"]
-        user_name = context.user_data["user_name"]
-        language_code = context.user_data["language_code"]
-
-        db_service = context.user_data["db_service"]
-
-        # Save or update user info
-        try:
-            db_service.save_user_info(user_id, user_name, language_code)
-            logger.debug(f"User info saved for user_id={user_id}")
-        except Exception as e:
-            logger.exception(f"Failed to save user info for user_id {user_id}: {e}")
-            system_response = text.Responses.generic_error(language="English")
-            await update.message.reply_text(system_response)
-            context.user_data["system_response"] = system_response
+        user = update.effective_user
+        if not user:
+            logger.error("No effective user found in the update.")
+            await update.message.reply_text("An error occurred. Please try again.")
             return
 
-        language = context.user_data.get("language", "English")
-        system_response = text.Greetings.first_time(language=language, user_name=user_name)
+        user_id = user.id
+        user_name = user.first_name or "there"
+        language_code = user.language_code or "en"
+
+        # Debug log
+        logger.debug(f"User ID: {user_id}, User Name: {user_name}, Language Code: {language_code}")
+
+        # Initialize DatabaseService from bot_data
+        db_service: DatabaseService = context.bot_data.get("db_service")
+        if not db_service:
+            logger.error("DatabaseService not found in bot_data.")
+            await update.message.reply_text("An internal error occurred. Please try again later.")
+            return
+
+        # Save or update user info in the database
+        try:
+            db_service.save_user_info(user_id, user_name, language_code)
+            logger.info(f"User info saved for user_id={user_id}")
+        except Exception as e:
+            logger.exception(f"Failed to save user info for user_id={user_id}: {e}")
+            await update.message.reply_text("Failed to initialize your settings. Please try again later.")
+            return
+
+        # Determine language name based on language_code
+        current_language = get_language_name(language_code)
+        context.user_data["language"] = current_language
+        context.user_data["user_id"] = user_id
+        context.user_data["user_name"] = user_name
+        context.user_data["language_code"] = language_code
+
+        # Generate the welcome message in the user's language
+        try:
+            system_response = text.Greetings.first_time(language=current_language, user_name=user_name)
+        except Exception as e:
+            logger.exception(f"Failed to generate welcome message: {e}")
+            system_response = "Welcome! (Default message)"
+
         await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
 
         # Store system_response in context.user_data

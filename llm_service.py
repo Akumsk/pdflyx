@@ -129,26 +129,6 @@ class LLMService:
                     except Exception as e:
                         logger.error(f"Error loading PDF file '{filename}': {str(e)}")
 
-                elif filename.lower().endswith(".docx"):
-                    try:
-                        content = self.load_word_file(file_path)
-                        doc = Document(page_content=content, metadata={"source": filename})
-                        documents.append(doc)
-                        found_valid_file = True
-                        logger.info(f"Loaded Word document: {filename}")
-                    except Exception as e:
-                        logger.error(f"Error loading Word file '{filename}': {str(e)}")
-
-                elif filename.lower().endswith(".xlsx"):
-                    try:
-                        content = self.load_excel_file(file_path)
-                        doc = Document(page_content=content, metadata={"source": filename})
-                        documents.append(doc)
-                        found_valid_file = True
-                        logger.info(f"Loaded Excel document: {filename}")
-                    except Exception as e:
-                        logger.error(f"Error loading Excel file '{filename}': {str(e)}")
-
                 else:
                     logger.debug(f"Skipped unsupported file type: {filename}")
 

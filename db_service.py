@@ -4,6 +4,7 @@ import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 from collections import defaultdict
+import logging
 
 from helpers import current_timestamp, get_language_name
 
@@ -14,6 +15,8 @@ db_user = os.getenv("DB_USER")
 db_name = os.getenv("DB_NAME")
 db_port = os.getenv("DB_PORT")
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class DatabaseService:
     def __init__(self):
@@ -438,10 +441,23 @@ class DatabaseService:
     def save_user_info(self, user_id, user_name, language_code):
         """
         Saves or updates user information in the users table.
-        On first insertion, sets current_language to language_code.
+        On first insertion, sets language_name based on the provided language_code.
+        If language_code is unsupported, defaults language_name to 'English'.
         """
-        language_name = get_language_name(language_code)
+        try:
+            language_name = get_language_name(language_code)
+        except Exception as e:
+            language_name = "English"
+            logger.exception(
+                f"Unsupported language code '{language_code}'. "
+                f"Defaulting language name to '{language_name}'."
+            )
+
         now = current_timestamp()
+        is_active = True
+        access = True
+        role = 'user'
+
         try:
             connection = self.connect()
             cursor = connection.cursor()
@@ -458,7 +474,7 @@ class DatabaseService:
                     access, 
                     role
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, TRUE, TRUE, 'user')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id) DO UPDATE
                 SET 
                     user_name = EXCLUDED.user_name,
@@ -469,16 +485,33 @@ class DatabaseService:
                     user_id,
                     user_name,
                     language_code,
-                    language_name,  # Initialize current_language with language_code
+                    language_name,  # Correctly maps to language_name
                     now,
-                    now
+                    now,
+                    is_active,
+                    access,
+                    role
                 ),
             )
             connection.commit()
-            print("User info saved/updated successfully.")
+            logger.info(
+                "User info saved/updated successfully.",
+                extra={
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "language_code": language_code,
+                    "current_language": language_name,
+                    "date_joined": now,
+                    "last_active": now,
+                    "is_active": is_active,
+                    "access": access,
+                    "role": role
+                }
+            )
         except Exception as e:
-            print(f"Error saving user info: {e}")
+            logger.error(f"Error saving user info for user_id {user_id}: {e}")
             connection.rollback()
+            raise e  # Re-raise exception if necessary
         finally:
             cursor.close()
             connection.close()

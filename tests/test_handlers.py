@@ -1,7 +1,7 @@
 # tests/pytest.py
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from tests.mock import AsyncMock, MagicMock, patch
 from handlers import (
     BotHandlers,
     WAITING_FOR_FOLDER_PATH,

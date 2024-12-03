@@ -1,7 +1,10 @@
 from datetime import datetime
 import re
+import logging
 from langchain.schema import Document, HumanMessage, AIMessage
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 def messages_to_langchain_messages(chat_history_texts):
 
@@ -89,16 +92,20 @@ def get_language_code(language_name):
     Maps language names to their respective language codes.
     """
     mapping = {
-        "English": "en",
-        "Russian": "ru",
-        "Indonesian": "id",
+        "english": "en",
+        "russian": "ru",
+        "indonesian": "id",
         # Add more mappings as needed
     }
-    return mapping.get(language_name, "en")
+    code = mapping.get(language_name.lower())
+    if code is None:
+        logger.warning(f"Unsupported language name '{language_name}'. Defaulting to 'en'.")
+        return "en"
+    return code
 
 def get_language_name(language_code):
     """
-    Maps language names to their respective language codes.
+    Maps language codes to their respective language names.
     """
     mapping = {
         "en": "English",
@@ -106,4 +113,8 @@ def get_language_name(language_code):
         "id": "Indonesian",
         # Add more mappings as needed
     }
-    return mapping.get(language_code, "English")
+    name = mapping.get(language_code.lower())
+    if name is None:
+        logger.warning(f"Unsupported language code '{language_code}'. Defaulting to 'English'.")
+        return "English"
+    return name

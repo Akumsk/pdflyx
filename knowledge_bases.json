@@ -1,0 +1,23 @@
+[
+    {
+        "name": "Российские стандарты",
+        "path": "E:\\knowledge_base\\russian_regulations",
+        "documents": [],
+        "language": "Russian",
+        "short_description": "Standards and regulations applicable in Russia."
+    },
+    {
+        "name": "Indonesian Regulations",
+        "path": "E:\\knowledge_base\\indonesian_regulations",
+        "documents": [],
+        "language": "Indonesian",
+        "short_description": "Regulations and standards applicable in Indonesia."
+    },
+    {
+        "name": "ISO Regulations",
+        "path": "E:\\knowledge_base\\iso_regulations",
+        "documents": [],
+        "language": "English",
+        "short_description": "International Organization for Standardization regulations."
+    }
+]

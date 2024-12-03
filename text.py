@@ -155,22 +155,25 @@ class Status:
             empty_files = "\n".join(empty_list)
             attention_messages = {
                 "English": (
-                    f"\u26A0 <b>Attention Needed</b>\n"
-                    f"The following documents need your attention:\n{empty_files}\n\n"
-                    f"\U0001F4A1 Tip: Make sure these files are in PDF format and properly readable. "
-                    f"Feel free to upload them again!"
+                    f"📄 <b>A Quick Note:</b>\n"
+                    f"The following documents have a few pages that are difficult to read:\n"
+                    f"\n{empty_files}\n\n"
+                    f"These might be scanned images, graphics, or unrecognizable text.\n\n"
+                    f"🤗 Don't worry! We'll still provide a comprehensive analysis of the documents. 👍\n"
                 ),
                 "Russian": (
-                    f"\u26A0 <b>Необходимо внимание</b>\n"
-                    f"Следующие документы требуют вашего внимания:\n{empty_files}\n\n"
-                    f"\U0001F4A1 Совет: Убедитесь, что эти файлы в формате PDF и открываются корректно. "
-                    f"Можете заново загрузить эти файлы!"
+                    f"📄 <b>Небольшое замечание:</b>\n"
+                    f"В следующих документах есть несколько страниц, которые сложно прочитать:\n"
+                    f"\n{empty_files}\n\n"
+                    f"Это может быть сканированный неразборчивый текст или графические изображения.\n\n"
+                    f"🤗 Не волнуйтесь! Бот успешно проанализирует документы, качество анализа останется на высоте. 👍\n"
                 ),
                 "Indonesian": (
-                    f"\u26A0 <b>Perhatian Diperlukan</b>\n"
-                    f"Dokumen berikut memerlukan perhatian Anda:\n{empty_files}\n\n"
-                    f"\U0001F4A1 Tip: Pastikan dokumen-dokumen ini dalam format PDF dan dapat dibaca dengan baik. "
-                    f"Jangan ragu untuk mengunggahnya kembali!"
+                    f"📄 <b>Catatan Kecil:</b>\n"
+                    f"Dokumen berikut memiliki beberapa halaman yang sulit dibaca:\n"
+                    f"\n{empty_files}\n\n"
+                    f"Ini bisa jadi gambar yang dipindai, grafik, atau teks yang tidak terbaca.\n\n"
+                    f"🤗 Jangan khawatir! Kami tetap akan memberikan analisis menyeluruh dari dokumen. 👍\n"
                 ),
             }
             response += attention_messages[language]

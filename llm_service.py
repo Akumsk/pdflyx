@@ -8,6 +8,7 @@ import datetime
 import hashlib
 import shutil
 import numpy as np
+from langdetect import detect
 
 import fitz
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
@@ -33,7 +34,7 @@ from db_service import DatabaseService
 from settings import OPENAI_API_KEY, MODEL_NAME, CHAT_HISTORY_LEVEL, DOCS_IN_RETRIEVER, RELEVANCE_THRESHOLD_DOCS, \
     RELEVANCE_THRESHOLD_PROMPT
 from decorators import log_errors
-from helpers import current_timestamp, parser_html
+from helpers import current_timestamp, parser_html, get_language_name
 from pathlib import Path
 import logging
 
@@ -46,7 +47,8 @@ class LLMService:
         try:
             self.llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model_name=model_name)
             self.embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            self.vector_store = None  # Initialize as None; to be loaded later
+            self.vector_store = None
+            self.knowledge_base_language = None
             logger.info(f"LLMService initialized with model '{model_name}'.")
         except Exception as e:
             logger.exception(f"Failed to initialize LLMService: {str(e)}")
@@ -98,7 +100,7 @@ class LLMService:
             return False
 
     @log_errors(default_return=(False, "An error occurred while indexing documents."))
-    def load_and_index_documents(self, folder_path):
+    def load_and_index_documents(self, folder_path, knowledge_base_language):
         """
         Load and index documents from the specified folder_path.
         If a saved vector store exists, load it. Otherwise, load documents, index them, and save the vector store.
@@ -106,6 +108,8 @@ class LLMService:
         """
         try:
             logger.debug(f"Starting load_and_index_documents for folder_path='{folder_path}'")
+            # Set knowledge_base_language
+            self.knowledge_base_language = knowledge_base_language
             # Check if vector store already exists
             if self.load_vector_store(folder_path):
                 logger.info(f"Vector store loaded from existing files in '{folder_path}'")
@@ -152,6 +156,31 @@ class LLMService:
             logger.error(f"Error during load_and_index_documents: {str(e)}")
             return (False, str(e))
 
+    def detect_language(self, text):
+        try:
+            lang_code = detect(text)
+            language = get_language_name(lang_code)
+            logger.info(f"Detected language: {language}")
+            return language
+        except Exception as e:
+            logger.error(f"Error detecting language: {e}")
+            return "Unknown"
+
+    def translate_text(self, text, target_language):
+        try:
+            prompt = (
+                f"Translate the following text to {target_language}. "
+                f"Respond only with the translated text and do not include any explanations or comments.\n\n"
+                f"Text:\n{text}"
+            )
+            response = self.llm.predict(prompt)
+            translated_text = response.strip()
+            logger.info(f"Translated text to {target_language}")
+            return translated_text
+        except Exception as e:
+            logger.error(f"Error translating text: {e}")
+            return text  # Return the original text if translation fails
+
     @log_errors(default_return=("An error occurred while generating a response.", None))
     def generate_response(self, prompt, chat_history=None):
         """
@@ -166,20 +195,36 @@ class LLMService:
                 None
             )
 
+        if not hasattr(self, 'knowledge_base_language') or not self.knowledge_base_language:
+            logger.error("Knowledge base language not set.")
+            return ("Knowledge base language not set.", None, None)
+
+        # Detect the language of the user's prompt
+        user_language = self.detect_language(prompt)
+        logger.info(f"Detected user language: {user_language}")
+
+        # Check if user's language is different from knowledge base language
+        if user_language.lower() != self.knowledge_base_language.lower():
+            # Translate the prompt to the knowledge base language
+            translated_prompt = self.translate_text(prompt, self.knowledge_base_language)
+            logger.info(f"Translated prompt from {user_language} to {self.knowledge_base_language}")
+        else:
+            translated_prompt = prompt
+
         # Ensure chat_history is a list
         if chat_history is None:
             chat_history = []
 
         # Retrieve documents with similarity scores
         retrieved_docs_with_scores = self.vector_store.similarity_search_with_score(
-            prompt, k=DOCS_IN_RETRIEVER
+            translated_prompt, k=DOCS_IN_RETRIEVER
         )
         logger.debug("Retrieved documents with similarity scores.")
 
         retrieved_docs = [doc for doc, _ in retrieved_docs_with_scores]
 
         # Compute embeddings similarity
-        relevance_scores = self.compute_embeddings_similarity(prompt, retrieved_docs)
+        relevance_scores = self.compute_embeddings_similarity(translated_prompt, retrieved_docs)
 
         # Filter relevant documents based on similarity threshold
         relevant_docs = [doc for doc, similarity in relevance_scores if similarity >= RELEVANCE_THRESHOLD_DOCS]
@@ -187,7 +232,13 @@ class LLMService:
         if not relevant_docs:
             logger.debug("No relevant documents found for the prompt.")
             answer = "I'm sorry, I could not find relevant information to answer your question."
-            return parser_html(answer), None, None
+            # Translate the answer back to user's language if necessary
+            if user_language.lower() != self.knowledge_base_language.lower():
+                translated_answer = self.translate_text(answer, user_language)
+                logger.info(f"Translated answer from {self.knowledge_base_language} to {user_language}")
+            else:
+                translated_answer = answer
+            return parser_html(translated_answer), None, None
 
         # Build the context string
         context_str = "\n\n".join([doc.page_content for doc in relevant_docs])
@@ -195,6 +246,7 @@ class LLMService:
         # Create the prompt template
         system_prompt = (
             "You are a project assistant from the consultant side on design and construction projects."
+            " If the user requests a calculation, try to execute it. If there is not enough initial data, use general values that apply in most cases. If it is not possible to use general values, request from the user the conditions needed to provide the calculation."
             " If you don't know the answer, say that you don't know."
             " Do not include references to the source documents in your answer."
             f" If you need to use the current date, today is {current_timestamp()}."
@@ -215,8 +267,8 @@ class LLMService:
         # Create the chain using RunnableSequence
         chain = prompt_template | self.llm
 
-        # Call the chain with the prompt, chat_history, and context
-        result = chain.invoke({"input": prompt, "chat_history": chat_history, "context": context_str})
+        # Call the chain with the translated prompt, chat_history, and context
+        result = chain.invoke({"input": translated_prompt, "chat_history": chat_history, "context": context_str})
 
         # Extract the answer text
         if isinstance(result, BaseMessage):
@@ -226,6 +278,14 @@ class LLMService:
         else:
             logger.error(f"Unexpected result type from chain: {type(result)}")
             answer = str(result)
+
+        # Translate the answer back to user's language if necessary
+        if user_language.lower() != self.knowledge_base_language.lower():
+            translated_answer = self.translate_text(answer, user_language)
+            logger.info(f"Translated answer from {self.knowledge_base_language} to {user_language}")
+        else:
+            translated_answer = answer
+            logger.info(f"No need to translate the answer")
 
         # Build the references
         references = {}
@@ -242,7 +302,7 @@ class LLMService:
         if is_relevant:
             # Build the answer with references
             answer_with_references = (
-                    answer + "\n\n------------------" + "\nReferences (/references):\n"
+                    translated_answer + "\n\n------------------" + "\nReferences (/references):\n"
             )
             for doc_name, pages in references.items():
                 pages_list = sorted(pages)
@@ -253,13 +313,23 @@ class LLMService:
             source_files = set([doc.metadata.get("source") for doc in relevant_docs])
         else:
             logger.debug("Similarity threshold not met. Returning answer without references.")
-            response = parser_html(answer)
+            response = parser_html(translated_answer)
             source_files = None
 
-        # Generate suggestions based on user prompt and LLM response
-        suggestions = self.generate_suggestions(user_prompt=prompt, llm_response=answer, n=3)
+        # Generate suggestions based on translated prompt and LLM response
+        suggestions = self.generate_suggestions(user_prompt=translated_prompt, llm_response=answer, n=3)
 
-        return response, source_files, suggestions
+        # Similarly, translate suggestions
+        if suggestions:
+            if user_language.lower() != self.knowledge_base_language.lower():
+                translated_suggestions = [self.translate_text(s, user_language) for s in suggestions]
+                logger.info(f"Translated suggestions from {self.knowledge_base_language} to {user_language}")
+            else:
+                translated_suggestions = suggestions
+        else:
+            translated_suggestions = None
+
+        return response, source_files, translated_suggestions
 
     def generate_suggestions(self, user_prompt, llm_response, n=3):
         """
@@ -281,6 +351,7 @@ class LLMService:
             suggestion_prompt = (
                 "Given the following user prompt and LLM response, determine if additional information is needed to help the user fulfill their request and continue the conversation effectively. "
                 "If yes, provide up to {n} additional prompts based on key concepts in the response, such as 'learn more about ...', 'how to determine ...', 'how to calculate ...', etc., that the user can use to gather more information. "
+                "Each suggestion have to fit in 50 or less symbols.\n"
                 "If no additional prompts are needed, respond with 'No suggestions needed'.\n\n"
                 f"User Prompt: {user_prompt}\n\n"
                 f"LLM Response: {llm_response}\n\n"
@@ -288,7 +359,6 @@ class LLMService:
             ).format(n=n)
 
             # Generate the suggestions using the LLM
-            # Use predict method for simplicity
             generated_text = self.llm.predict(suggestion_prompt)
 
             # Extract the text from the response
@@ -364,6 +434,7 @@ class LLMService:
         except Exception as e:
             logger.exception(f"Error in is_prompt_relevant_to_documents: {str(e)}")
             return False
+
 
     def get_empty_docs(self, folder_path):
         """

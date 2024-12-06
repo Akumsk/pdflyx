@@ -18,7 +18,7 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 
 from llm_service import LLMService
-from settings import CHAT_HISTORY_LEVEL, knowledge_base_paths, SUPPORTED_LANGUAGES
+from settings import CHAT_HISTORY_LEVEL, knowledge_base_paths, SUPPORTED_LANGUAGES, knowledge_base_language
 from db_service import DatabaseService
 from decorators import log_errors, log_event, authorized_only, initialize_services, ensure_documents_indexed
 from helpers import messages_to_langchain_messages, get_language_code, get_language_name
@@ -293,6 +293,7 @@ class BotHandlers:
         if data.startswith("set_knowledge:"):
             selection = data[len("set_knowledge:"):]
             folder_path = knowledge_base_paths.get(selection, None)
+            knowledge_base_lang = knowledge_base_language.get(selection, 'English')  # Get the knowledge base language
             if folder_path is None:
                 system_response = KnowledgeBaseResponses.unknown_knowledge_base()
                 await query.message.reply_text(system_response)
@@ -324,7 +325,8 @@ class BotHandlers:
                     logger.warning(f"No valid files in knowledge base '{selection}' for user_id={user_id}")
                     return
 
-                index_status, index_message = llm_service.load_and_index_documents(folder_path)
+                # Pass the knowledge base language to load_and_index_documents
+                index_status, index_message = llm_service.load_and_index_documents(folder_path, knowledge_base_lang)
                 if not index_status:
                     logger.error(f"Error during load_and_index_documents: {index_message}")
                     await query.message.reply_text(KnowledgeBaseResponses.indexing_error(language=language),
@@ -390,9 +392,13 @@ class BotHandlers:
         logger.debug(f"Set folder_path='{folder_path}' for user_id={user_id}")
 
         try:
-            index_status = llm_service.load_and_index_documents(folder_path)
-            if index_status != "Documents successfully indexed.":
-                logger.error(f"Error during load_and_index_documents: {index_status}")
+            # For custom folders, you might not have a predefined language.
+            # You can set a default language or prompt the user to specify.
+            # Here, we'll set the default language to 'English'.
+            knowledge_base_lang = 'English'  # Default language
+            index_status, index_message = llm_service.load_and_index_documents(folder_path, knowledge_base_lang)
+            if not index_status:
+                logger.error(f"Error during load_and_index_documents: {index_message}")
                 system_response = text.Responses.indexing_error(language=language)
                 await update.message.reply_text(system_response, parse_mode=ParseMode.HTML)
                 # Save event log

@@ -915,15 +915,17 @@ class KnowledgeBaseResponses:
                 f"\u2022 Ask questions about regulations\n"
                 f"\u2022 Request specific information\n"
                 f"\u2022 Search for standards\n\n"
+                f"I will try to answer your questions based on the construction standards from my knowledge base.\n"
                 f"What would you like to know about? \U0001F914"
             ),
             "Russian": (
                 f"\u2705 <b>База знаний подключена!</b>\n\n"
                 f"\U0001F4DA Сейчас используется: <i>{knowledge_base_name}</i>\n\n"
                 f"\U0001F4A1 Вы можете:\n"
-                f"\u2022 Задавать вопросы о нормативных актах\n"
-                f"\u2022 Запрашивать конкретную информацию\n"
+                f"\u2022 Задавать вопросы о стройке или проекте\n"
+                f"\u2022 Запрашивать справочную информацию\n"
                 f"\u2022 Искать стандарты\n\n"
+                f"Я постараюсь ответить на ваш вопрос основываясь на строительных нормах из моей базы знаний.\n"
                 f"Что вы хотите узнать? \U0001F914"
             ),
             "Indonesian": (
@@ -933,6 +935,7 @@ class KnowledgeBaseResponses:
                 f"\u2022 Mengajukan pertanyaan tentang regulasi\n"
                 f"\u2022 Meminta informasi spesifik\n"
                 f"\u2022 Mencari standar\n\n"
+                f"Saya akan mencoba menjawab pertanyaan Anda berdasarkan standar konstruksi dari basis pengetahuan saya.\n"
                 f"Apa yang ingin Anda ketahui? \U0001F914"
             ),
         }

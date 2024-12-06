@@ -20,6 +20,12 @@ knowledge_base_paths = {
     "ISO Regulations": r"E:\knowledge_base\iso_regulations",
 }
 
+knowledge_base_language = {
+    "Российские стандарты": r"Russian",
+    "Indonesian Regulations": r"Indonesioan",
+    "ISO Regulations": r"English",
+}
+
 SUPPORTED_LANGUAGES = ["English", "Russian", "Indonesian"]
 
 CHAT_HISTORY_LEVEL = 5

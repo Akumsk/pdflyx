@@ -13,3 +13,4 @@ pytest-asyncio
 aiofiles
 functools
 python-json-logger
+langdetect
